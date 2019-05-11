@@ -405,6 +405,87 @@ rl is black, so the subtree starting at R(value) is in case 1 or 2.
     (* Sequence has no parent, so replacing double black by black is okay. *)
     ensure_root_is_black sequence
 
+let of_array ?(ofs = 0) ?len array =
+  (* [of_sub_array ofs len bd] builds a sequence of black depth [bd]
+     (the black depth of a tree as the number of black nodes in a path from the root to a leaf)
+     from the values of [array] from [ofs] to [ofs + len - 1].
+
+     [len] must be > 0.
+     If [len] = 2 ^ K - 1, then [bd] must be K or K + 1.
+     If 2 ^ (K - 1) <= [len] < 2 ^ K - 1, then [bd] must be K. *)
+  let rec of_sub_array ofs len bd =
+    if len = 1 then
+      (* [len] = 2 ^ 1 - 1, so [bd] is 1 or 2. *)
+      if bd = 1 then
+        red array.(ofs) Leaf Leaf
+      else
+        black array.(ofs) Leaf Leaf
+
+    else if len = 2 then
+      (* 2 ^ 1 <= [len] < 2 ^ 2 - 1, so [bd] is 2. *)
+      black array.(ofs + 1) (red array.(ofs) Leaf Leaf) Leaf
+
+    else
+      (* [len] = 1 + [a] + [b], with [a] and [b] >= 1 *)
+      let a_plus_b = len - 1 in
+      let a = a_plus_b / 2 in
+      let b = a_plus_b - a in
+
+      let left = of_sub_array ofs a (bd - 1) in
+      let right = of_sub_array (ofs + a + 1) b (bd - 1) in
+
+      (* Let's prove that bd - 1 is an okay black depth for both a and b,
+         so that Black (left, right) has black depth bd.
+
+         If len is odd, a = b = len - 1 / 2.
+
+         If a = 2 ^ K - 1, bd - 1 must be K or K + 1.
+         len = 1 + 2 * (2 ^ K - 1) = 2 ^ (K + 1) - 1.
+         So bd must be K + 1 or K + 2.
+         So bd - 1 is OK for a and b.
+
+         Otherwise, 2 ^ (K - 1) <= a < 2 ^ K - 1 and bd - 1 must be K.
+         So 1 + 2 ^ K <= len < 2 ^ (K + 1) - 1.
+         So bd = K + 1.
+         So bd - 1 is OK for a and b.
+
+         If len is even, a = (len - 2) / 2, and b = a + 1.
+
+         If a = 2 ^ K - 1, bd - 1 must be K or K + 1.
+         len = 2 ^ (K + 1).
+         So bd = K + 2.
+         So bd - 1 is OK for a.
+         b = 2 ^ K = 2 ^ (bd - 2), so bd - 1 is also OK for b.
+
+         Otherwise, 2 ^ (K - 1) <= a < 2 ^ K - 1 and bd - 1 must be K.
+         So 2 + 2 ^ K <= len < 2 ^ (K + 1).
+         If len = 2 ^ (K + 1) - 1, then len is not even, so this is impossible.
+         So 2 + 2 ^ K <= len < 2 ^ (K + 1) - 1.
+         So bd = K + 1, and bd - 1 is indeed K.
+         So bd - 1 is OK for a.
+         We have 2 ^ (K - 1) + 1 <= b < 2 ^ K.
+         If b = 2 ^ K - 1, bd - 1 (= K) must be K or K + 1, so bd - 1 is OK for b.
+         Else 2 ^ (K - 1) + 1 <= b < 2 ^ K - 1, and db - 1 (= K) must be K.
+         So bd - 1 is OK for b. *)
+      black array.(ofs + a) left right
+  in
+
+  let len = match len with None -> Array.length array - ofs | Some len -> len in
+  if len = 0 then
+    empty
+  else
+    (* Find K such that 2 ^ (K - 1) <= len < 2 ^ K. *)
+    let rec find_k_from i =
+      if len < 1 lsl i then
+        i
+      else
+        find_k_from (i + 1)
+    in
+    of_sub_array 0 len (find_k_from 1)
+
+let of_list ?ofs ?len list =
+  of_array ?ofs ?len (Array.of_list list)
+
 let rec iter f sequence =
   match sequence with
     | Leaf

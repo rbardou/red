@@ -27,19 +27,20 @@ let load_channel ch =
   let characters = Utf8.split_runes string in
 
   (* Split characters into lines. *)
-  let line = ref Sequence.empty in
-  let text = ref Sequence.empty in
+  let line = ref [] in
+  let text = ref [] in
   let add_character character =
     if character = "\n" then (
-      text := Sequence.append !line !text;
-      line := Sequence.empty
+      (* TODO: Sequence.of_list_rev (requires Sequence.of_array_rev?) *)
+      text := Sequence.of_list (List.rev !line) :: !text;
+      line := []
     ) else
-      line := Sequence.append character !line
+      line := character :: !line
   in
   List.iter add_character characters;
 
   (* Add last line. *)
-  Sequence.append !line !text
+  Sequence.of_list (List.rev (Sequence.of_list (List.rev !line) :: !text))
 
 let load_file filename =
   let ch = open_in filename in

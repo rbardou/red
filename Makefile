@@ -9,8 +9,8 @@ example:
 	ln -sf _build/termlib/example.byte example
 
 red:
-	$(OCAMLBUILD) -I termlib src/main.byte
-	ln -sf _build/src/main.byte red
+	$(OCAMLBUILD) -I termlib src/main.native
+	ln -sf _build/src/main.native red
 
 clean:
 	rm -rf _build example red

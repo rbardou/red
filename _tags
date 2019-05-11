@@ -2,3 +2,4 @@ true: package(unix)
 true: warn(-40)
 true: warn(-23)
 true: debug
+true: annot

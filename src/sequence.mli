@@ -45,6 +45,19 @@ val remove: int -> 'a t -> 'a t
 (** Make a sequence of size one. *)
 val one: 'a -> 'a t
 
+(** Make a sequence from an array.
+
+    More efficient than using [append] repeatedly: O(n) instead of O(n * log(n)).
+
+    Parameter [ofs] (offset) defines the starting index in the array. Default is 0.
+
+    Parameter [len] defines the number of items to add starting from [ofs].
+    Default is the length of the array minus [ofs]. *)
+val of_array: ?ofs: int -> ?len: int -> 'a array -> 'a t
+
+(** Same as [of_array] but for lists. *)
+val of_list: ?ofs: int -> ?len: int -> 'a list -> 'a t
+
 (** Iterate over values in index order. *)
 val iter: ('a -> unit) -> 'a t -> unit
 
