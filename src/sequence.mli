@@ -73,6 +73,12 @@ val fold: ('a -> 'b -> 'a) -> 'a -> 'b t -> 'a
     Index can be from zero to the sequence length. *)
 val split: int -> 'a t -> 'a t * 'a t
 
+(** Split a sequence at a given index and return the left-hand side. *)
+val split_left: int -> 'a t -> 'a t
+
+(** Split a sequence at a given index and return the right-hand side. *)
+val split_right: int -> 'a t -> 'a t
+
 (** Concatenate two sequences. *)
 val concat: 'a t -> 'a t -> 'a t
 

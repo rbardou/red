@@ -21,8 +21,12 @@ let create ?focus layout =
 
 exception Exit
 
-let insert_character character state =
-  File.insert_character character state.focus.view
+let replace_selection_by_character character state =
+  (* TODO: group this under a "modify" wrapper, which would reset preferred x automatically,
+     remove the need for if_writable, and possibly add to undo list *)
+  File.delete_selection state.focus.view;
+  File.insert_character character state.focus.view;
+  File.reset_preferred_x state.focus.view.file
 
 let on_key_press state (key: Key.t) =
   match Key.Map.find key state.bindings with
@@ -31,9 +35,9 @@ let on_key_press state (key: Key.t) =
     | exception Not_found ->
         match Key.symbol key with
           | ASCII char ->
-              insert_character (String.make 1 char) state
+              replace_selection_by_character (String.make 1 char) state
           | Unicode character ->
-              insert_character character state
+              replace_selection_by_character character state
           | Control ->
               Log.infof "unbound key: %s" (Key.show key)
 

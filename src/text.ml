@@ -65,3 +65,43 @@ let insert_character x y character (text: t) =
         let line = Line.insert x character line in
         (* Replace line. *)
         Sequence.set y line text
+
+let delete_region ~x ~y ~characters ~lines (text: t) =
+  if lines = 0 then
+    (* Delete in the middle of line [y]. *)
+      match Sequence.get y text with
+        | None ->
+            text
+        | Some line ->
+            let left, middle_and_right = Line.split x line in
+            let right = Line.split_right characters middle_and_right in
+            let line = Line.concat left right in
+            Sequence.set y line text
+
+  else
+    (* Partially delete first line. *)
+    let first_line =
+      match Sequence.get y text with
+        | None ->
+            Line.empty
+        | Some line ->
+            Line.split_left x line
+    in
+
+    let rec remove_lines count text =
+      if count < 1 then
+        (* Partially delete last line and append it to the first line. *)
+        match Sequence.get (y + 1) text with
+          | None ->
+              text
+          | Some line ->
+              let text = Sequence.remove (y + 1) text in
+              let line = Line.split_right characters line in
+              Sequence.set y (Line.concat first_line line) text
+
+      else
+        (* Delete one full line and continue. *)
+        let text = Sequence.remove (y + count) text in
+        remove_lines (count - 1) text
+    in
+    remove_lines (lines - 1) text

@@ -20,3 +20,15 @@ val length: t -> int
 
 (** Insert a character into a line. *)
 val insert: int -> Character.t -> t -> t
+
+(** Split a line in two. *)
+val split: int -> t -> t * t
+
+(** Split a line and return the left-hand side. *)
+val split_left: int -> t -> t
+
+(** Split a line and return the right-hand side. *)
+val split_right: int -> t -> t
+
+(** Concatenate two lines. *)
+val concat: t -> t -> t

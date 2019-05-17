@@ -243,9 +243,9 @@ let update_marks_after_delete ~x ~y ~characters ~lines marks =
 
                ------------M------
 
-           One again, the length of XXX and YYYY does not matter. *)
+           Once again, only the length of the last line matters. *)
         (
-          mark.x <- mark.x - characters + x;
+          mark.x <- mark.x - characters + (if lines = 0 then 0 else x);
           mark.y <- mark.y - lines;
         )
       else
@@ -255,24 +255,42 @@ let update_marks_after_delete ~x ~y ~characters ~lines marks =
   in
   List.iter move_mark marks
 
+let delete_selection view =
+  if_writable view @@ fun () ->
+  foreach_cursor view @@ fun cursor ->
+
+  (* Compute region. *)
+  let left, right = selection_boundaries cursor in
+  let { x; y } = left in
+  let lines, characters =
+    if right.y = y then
+      (* No line split in selection. *)
+      0, right.x - x
+    else
+      right.y - y, right.x
+  in
+
+  (* Delete selection. *)
+  view.file.text <- Text.delete_region ~x ~y ~characters ~lines view.file.text;
+
+  (* We modified the text, so we must move marks. *)
+  let update_view view = update_marks_after_delete ~x ~y ~characters ~lines view.marks in
+  List.iter update_view view.file.views
+
 let insert_character (character: Character.t) view =
   if_writable view @@ fun () ->
-  (
-    foreach_cursor view @@ fun cursor ->
+  foreach_cursor view @@ fun cursor ->
 
-    (* TODO: remove selected text. *)
+  (* Insert character into text. *)
+  view.file.text <- Text.insert_character cursor.position.x cursor.position.y character view.file.text;
 
-    (* Insert character into text. *)
-    view.file.text <- Text.insert_character cursor.position.x cursor.position.y character view.file.text;
+  (* We modified the text, so we must move marks that are after what we inserted. *)
+  let update_view view =
+    update_marks_after_insert ~x: cursor.position.x ~y: cursor.position.y ~characters: 1 ~lines: 0 view.marks
+  in
+  List.iter update_view view.file.views
 
-    (* We modified the text, so we must move marks that are after what we inserted. *)
-    let update_view view =
-      update_marks_after_insert ~x: cursor.position.x ~y: cursor.position.y ~characters: 1 ~lines: 0 view.marks
-    in
-    List.iter update_view view.file.views;
-  );
-
-  (* We may have moved some cursors horizontally, so we must reset preferred x positions. *)
-  foreach_view view.file @@ fun view ->
+let reset_preferred_x file =
+  foreach_view file @@ fun view ->
   foreach_cursor view @@ fun cursor ->
   cursor.preferred_x <- cursor.position.x

@@ -558,6 +558,14 @@ let rec split index sequence =
 
     !left, !right
 
+(* TODO: we don't need to build the right-hand side. *)
+let split_left index sequence =
+  fst (split index sequence)
+
+(* TODO: we don't need to build the left-hand side. *)
+let split_right index sequence =
+  snd (split index sequence)
+
 let concat left right =
   let result = ref left in
   for i = 0 to count right - 1 do

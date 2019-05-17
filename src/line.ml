@@ -11,3 +11,11 @@ let get = Sequence.get
 let length = Sequence.count
 
 let insert = Sequence.insert
+
+let split = Sequence.split
+
+let split_left = Sequence.split_left
+
+let split_right = Sequence.split_right
+
+let concat = Sequence.concat

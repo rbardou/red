@@ -34,3 +34,9 @@ val get_line_length: int -> t -> int
 
     Usage: [insert (x, y) character text] *)
 val insert_character: int -> int -> Character.t -> t -> t
+
+(** Delete a region.
+
+    Start at [x, y].
+    Remove until [lines] newline characters, then [characters] more characters. *)
+val delete_region: x: int -> y: int -> characters: int -> lines: int -> t -> t

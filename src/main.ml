@@ -35,6 +35,11 @@ let main () =
   Down => "move_down";
   Up => "move_up";
 
+  Shift_right => "select_right";
+  Shift_left => "select_left";
+  Shift_down => "select_down";
+  Shift_up => "select_up";
+
   Alt_right => "focus_right";
   Alt_left => "focus_left";
   Alt_down => "focus_down";
