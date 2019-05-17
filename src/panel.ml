@@ -39,20 +39,11 @@ let render focused_panel (frame: Render.frame) panel ~x ~y ~w ~h =
   let has_focus = panel == focused_panel in
   let scroll_x = panel.view.scroll_x in
   let scroll_y = panel.view.scroll_y in
-
-  (* Get cursors and selections which are visible in the rendered area. *)
-  let cursors =
-    Cursors.get
-      ~x1: scroll_x
-      ~y1: scroll_y
-      ~x2: (scroll_x + w)
-      ~y2: (scroll_y + h)
-      panel.view.cursors
-  in
+  let cursors = panel.view.cursors in
 
   (* Return true whether a given position is the position of a cursor. *)
-  let cursor_at_this_position x y (cursor: Cursors.cursor) =
-    cursor.x = x && cursor.y = y
+  let cursor_is_at x y (cursor: File.cursor) =
+    cursor.position.x = x && cursor.position.y = y
   in
 
   (* Text area. *)
@@ -76,9 +67,9 @@ let render focused_panel (frame: Render.frame) panel ~x ~y ~w ~h =
       in
       (* TODO: show trailing spaces *)
       let style =
-        if has_focus && List.exists (cursor_at_this_position text_x text_y) cursors then
-          Render.style ~fg_color: Black ~bg_color: Yellow ()
-        else if List.exists (Cursors.is_in_selection text_x text_y) cursors then
+        if List.exists (cursor_is_at text_x text_y) cursors then
+          Render.style ~fg_color: Black ~bg_color: (if has_focus then Cyan else Yellow) ()
+        else if List.exists (File.cursor_is_in_selection text_x text_y) cursors then
           Render.style ~fg_color: Black ~bg_color: White ()
         else
           Render.default

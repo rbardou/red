@@ -29,3 +29,8 @@ val get_line_count: t -> int
 
     Usage: [get_line_length y text] *)
 val get_line_length: int -> t -> int
+
+(** Insert a character at a given position.
+
+    Usage: [insert (x, y) character text] *)
+val insert_character: int -> int -> Character.t -> t -> t

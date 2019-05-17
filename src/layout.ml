@@ -14,10 +14,10 @@ type t =
 let single panel =
   Single panel
 
-let vertical_split ?(pos = Ratio (1, 2)) ?(line = true) left right =
+let vertical_split ?(pos = Ratio (1, 2)) ?(line = false) left right =
   Split (Vertical, pos, line, left, right)
 
-let horizontal_split ?(pos = Ratio (1, 2)) ?(line = true) left right =
+let horizontal_split ?(pos = Ratio (1, 2)) ?(line = false) left right =
   Split (Horizontal, pos, line, left, right)
 
 let line_style =
@@ -104,3 +104,136 @@ let rec get_first_panel layout =
         panel
     | Split (_, _, _, sublayout, _) ->
         get_first_panel sublayout
+
+type get_panel_result =
+  | Panel_not_found
+  | Found_panel
+  | Found_result of Panel.t
+
+let option_of_get_panel_result = function
+  | Panel_not_found | Found_panel -> None
+  | Found_result panel -> Some panel
+
+let get_panel_right panel layout =
+  let rec find layout =
+    match layout with
+      | Single single_panel ->
+          if single_panel == panel then
+            Found_panel
+          else
+            Panel_not_found
+      | Split (Vertical, _, _, top, bottom) ->
+          (
+            match find top with
+              | Panel_not_found ->
+                  find bottom
+              | Found_panel ->
+                  Found_panel
+              | Found_result _ as x ->
+                  x
+          )
+      | Split (Horizontal, _, _, left, right) ->
+          (
+            match find left with
+              | Panel_not_found ->
+                  find right
+              | Found_panel ->
+                  Found_result (get_first_panel right)
+              | Found_result _ as x ->
+                  x
+          )
+  in
+  option_of_get_panel_result (find layout)
+
+let get_panel_left panel layout =
+  let rec find layout =
+    match layout with
+      | Single single_panel ->
+          if single_panel == panel then
+            Found_panel
+          else
+            Panel_not_found
+      | Split (Vertical, _, _, top, bottom) ->
+          (
+            match find top with
+              | Panel_not_found ->
+                  find bottom
+              | Found_panel ->
+                  Found_panel
+              | Found_result _ as x ->
+                  x
+          )
+      | Split (Horizontal, _, _, left, right) ->
+          (
+            match find right with
+              | Panel_not_found ->
+                  find left
+              | Found_panel ->
+                  Found_result (get_first_panel left)
+              | Found_result _ as x ->
+                  x
+          )
+  in
+  option_of_get_panel_result (find layout)
+
+let get_panel_down panel layout =
+  let rec find layout =
+    match layout with
+      | Single single_panel ->
+          if single_panel == panel then
+            Found_panel
+          else
+            Panel_not_found
+      | Split (Vertical, _, _, top, bottom) ->
+          (
+            match find top with
+              | Panel_not_found ->
+                  find bottom
+              | Found_panel ->
+                  Found_result (get_first_panel bottom)
+              | Found_result _ as x ->
+                  x
+          )
+      | Split (Horizontal, _, _, left, right) ->
+          (
+            match find right with
+              | Panel_not_found ->
+                  find left
+              | Found_panel ->
+                  Found_panel
+              | Found_result _ as x ->
+                  x
+          )
+  in
+  option_of_get_panel_result (find layout)
+
+let get_panel_up panel layout =
+  let rec find layout =
+    match layout with
+      | Single single_panel ->
+          if single_panel == panel then
+            Found_panel
+          else
+            Panel_not_found
+      | Split (Vertical, _, _, top, bottom) ->
+          (
+            match find bottom with
+              | Panel_not_found ->
+                  find top
+              | Found_panel ->
+                  Found_result (get_first_panel top)
+              | Found_result _ as x ->
+                  x
+          )
+      | Split (Horizontal, _, _, left, right) ->
+          (
+            match find right with
+              | Panel_not_found ->
+                  find left
+              | Found_panel ->
+                  Found_panel
+              | Found_result _ as x ->
+                  x
+          )
+  in
+  option_of_get_panel_result (find layout)

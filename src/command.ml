@@ -16,20 +16,26 @@ let bind (state: State.t) key name =
 (*                                   Helpers                                  *)
 (******************************************************************************)
 
-let move vertical f = fun (state: State.t) ->
+let move vertical f (state: State.t) =
   let text = state.focus.view.file.text in
-  let move (cursor: Cursors.cursor) =
-    let x, y = f text (if vertical then cursor.preferred_x else cursor.x) cursor.y in
-    {
-      cursor with
-        selection_start_x = x;
-        selection_start_y = y;
-        x;
-        y;
-        preferred_x = if vertical then cursor.preferred_x else x;
-    }
+  let move (cursor: File.cursor) =
+    let position = cursor.position in
+    let selection_start = cursor.selection_start in
+    let x, y = f text (if vertical then cursor.preferred_x else position.x) position.y in
+    selection_start.x <- x;
+    selection_start.y <- y;
+    position.x <- x;
+    position.y <- y;
+    cursor.preferred_x <- if vertical then cursor.preferred_x else x;
   in
-  state.focus.view.cursors <- Cursors.map move state.focus.view.cursors
+  File.foreach_cursor state.focus.view move
+
+let focus_relative get (state: State.t) =
+  match get state.focus state.layout with
+    | None ->
+        ()
+    | Some panel ->
+        state.focus <- panel
 
 (******************************************************************************)
 (*                                 Definitions                                *)
@@ -67,3 +73,8 @@ let () = define "move_up" @@ move true @@ fun text x y ->
     min x (Text.get_line_length y text), y
   else
     min x (Text.get_line_length (y - 1) text), y - 1
+
+let () = define "focus_right" @@ focus_relative Layout.get_panel_right
+let () = define "focus_left" @@ focus_relative Layout.get_panel_left
+let () = define "focus_down" @@ focus_relative Layout.get_panel_down
+let () = define "focus_up" @@ focus_relative Layout.get_panel_up

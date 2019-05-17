@@ -54,3 +54,14 @@ let get_line_length y (text: t) =
         0
     | Some line ->
         Line.length line
+
+let insert_character x y character (text: t) =
+  match Sequence.get y text with
+    | None ->
+        (* No line at [y], insert new line. *)
+        Sequence.insert y (Line.one character) text
+    | Some line ->
+        (* Insert in line. *)
+        let line = Line.insert x character line in
+        (* Replace line. *)
+        Sequence.set y line text
