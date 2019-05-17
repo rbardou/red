@@ -38,9 +38,10 @@ let restore () =
   show_cursor ();
   reset_style ();
   goto_xy 0 0;
-  clear ()
+  clear ();
+  flush stdout
 
-let raw_mode ?(restore_at_exit = true) () =
+let raw_mode () =
   match Unix.tcgetattr Unix.stdout with
     | exception Unix.Unix_error (Unix.ENOTTY, _, _) ->
         ()
@@ -89,10 +90,24 @@ let raw_mode ?(restore_at_exit = true) () =
           let handler _ = size_changed := true in
           Sys.set_signal sigwinch (Signal_handle handler);
           resize_signal_set := true
-        );
+        )
 
-        (* Restore at exit. *)
-        if restore_at_exit then at_exit restore
+let with_raw_mode f =
+  let already_restored = ref false in
+  (
+    at_exit @@ fun () ->
+    if not !already_restored then restore ()
+  );
+  raw_mode ();
+  match f () with
+    | exception exn ->
+        restore ();
+        already_restored := true;
+        raise exn
+    | x ->
+        restore ();
+        already_restored := true;
+        x
 
 let size_changed () =
   let result = !size_changed in

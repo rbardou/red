@@ -78,8 +78,12 @@ val output: ?previous_frame: frame -> frame -> unit
 
 (** Render text to a frame.
 
-    Usage: [text_to_frame frame x y width text]
+    Usage: [text frame x y width text]
 
     If text is longer than [width] printable characters, it is truncated.
     If it is smaller, it is extended with spaces. *)
-val text_to_frame: ?style: style -> frame -> int -> int -> int -> string -> unit
+val text: ?style: style -> frame -> int -> int -> int -> string -> unit
+
+(** Same as [text], but using a format string. *)
+val textf: ?style: style -> frame -> int -> int -> int ->
+  ('a, unit, string, unit) format4 -> 'a

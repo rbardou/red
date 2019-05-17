@@ -2,7 +2,7 @@ OCAMLBUILD := ocamlbuild
 OCAMLBUILD := $(OCAMLBUILD) -no-links
 OCAMLBUILD := $(OCAMLBUILD) -use-ocamlfind
 
-default: example red
+default: red
 
 example:
 	$(OCAMLBUILD) termlib/example.byte

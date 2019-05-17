@@ -161,7 +161,7 @@ let output ?previous_frame frame =
 
   flush stdout
 
-let text_to_frame ?style frame x y width text =
+let text ?style frame x y width text =
   let rec loop i l =
     if i >= width then
       i
@@ -185,3 +185,6 @@ let text_to_frame ?style frame x y width text =
   for i = len to width - 1 do
     set frame (x + i) y empty_cell
   done
+
+let textf ?style frame x y width format =
+  Printf.ksprintf (text ?style frame x y width) format

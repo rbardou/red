@@ -4,8 +4,8 @@
 
 (** Set terminal settings to enter "raw mode".
 
-    Will call {!restore} at exit unless [restore_at_exit] is [false]. *)
-val raw_mode: ?restore_at_exit: bool -> unit -> unit
+    Don't forget to call [restore], or use [with_raw_mode] instead. *)
+val raw_mode: unit -> unit
 
 (** Restore terminal settings to what they were before {!raw_mode}.
 
@@ -13,9 +13,14 @@ val raw_mode: ?restore_at_exit: bool -> unit -> unit
     and {!clear}. *)
 val restore: unit -> unit
 
+(** Enter raw mode, run a function, and restore raw mode even if said
+    function raises an exception. *)
+val with_raw_mode: (unit -> 'a) -> 'a
+
 (** Return [true] if terminal size changed since last call to {!size_changed}.
 
-    Always return [true] at first call. *)
+    Always return [true] at first call.
+    Only works if [raw_mode] has been called. *)
 val size_changed: unit -> bool
 
 (** {2 Input Parsing} *)
