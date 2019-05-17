@@ -19,3 +19,13 @@ val of_utf8_substrings_offset_0: (string * int) list -> t
     Return character at line [y], column [x].
     Both [x] and [y] start at [0]. *)
 val get: int -> int -> t -> Character.t option
+
+(** Get the number of lines in a text.
+
+    Usage: [get_line_count y text] *)
+val get_line_count: t -> int
+
+(** Get length of a given line.
+
+    Usage: [get_line_length y text] *)
+val get_line_length: int -> t -> int

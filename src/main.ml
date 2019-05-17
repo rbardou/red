@@ -28,6 +28,14 @@ let main () =
     State.create layout
   in
 
+  let (=>) = Command.bind state in
+
+  Ctrl_q => "quit";
+  Right => "move_right";
+  Left => "move_left";
+  Down => "move_down";
+  Up => "move_up";
+
   Term_run.run_raw_mode
     ~on_key_press: (State.on_key_press state)
     ~on_render: (State.render state)

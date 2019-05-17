@@ -74,6 +74,7 @@ let render focused_panel (frame: Render.frame) panel ~x ~y ~w ~h =
         else
           character
       in
+      (* TODO: show trailing spaces *)
       let style =
         if has_focus && List.exists (cursor_at_this_position text_x text_y) cursors then
           Render.style ~fg_color: Black ~bg_color: Yellow ()

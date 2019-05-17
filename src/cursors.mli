@@ -18,6 +18,7 @@ type cursor =
     selection_start_y: int;
     x: int;
     y: int;
+    preferred_x: int; (** column to use when pressing Up and Down, reset when pressing Left and Right *)
     clipboard: Text.t ref;
   }
 
@@ -50,3 +51,6 @@ val insert: x: int -> y: int -> characters: int -> lines: int -> t -> t
     the end of line [y] is deleted, that line [y + 1] is deleted,
     and that the first 10 characters of line [y + 2] are deleted. *)
 val delete: x: int -> y: int -> characters: int -> lines: int -> t -> t
+
+(** Modify all cursors. *)
+val map: (cursor -> cursor) -> t -> t

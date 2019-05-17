@@ -5,3 +5,5 @@ let empty = Sequence.empty
 let of_list list = Sequence.of_list list
 
 let get = Sequence.get
+
+let length = Sequence.count

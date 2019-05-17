@@ -2,6 +2,7 @@ type t =
   {
     mutable layout: Layout.t;
     mutable focus: Panel.t;
+    mutable bindings: (t -> unit) Key.Map.t;
   }
 
 let create ?focus layout =
@@ -15,13 +16,17 @@ let create ?focus layout =
   {
     layout;
     focus;
+    bindings = Key.Map.empty;
   }
 
 exception Exit
 
 let on_key_press state (key: Key.t) =
-  if key = Ctrl_c then raise Exit;
-  () (* TODO *)
+  match Key.Map.find key state.bindings with
+    | exception Not_found ->
+        Log.infof "unbound key: %s" (Key.show key)
+    | command ->
+        command state
 
 let render state frame =
   Layout.render

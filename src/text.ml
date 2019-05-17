@@ -44,3 +44,13 @@ let get x y (text: t) =
         None
     | Some line ->
         Line.get x line
+
+let get_line_count (text: t) =
+  Sequence.count text
+
+let get_line_length y (text: t) =
+  match Sequence.get y text with
+    | None ->
+        0
+    | Some line ->
+        Line.length line

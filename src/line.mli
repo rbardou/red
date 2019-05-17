@@ -11,3 +11,6 @@ val of_list: Character.t list -> t
 
 (** Get a character from its index in a line. *)
 val get: int -> t -> Character.t option
+
+(** Get the length of a line. *)
+val length: t -> int

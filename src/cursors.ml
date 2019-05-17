@@ -4,6 +4,7 @@ type cursor =
     selection_start_y: int;
     x: int;
     y: int;
+    preferred_x: int;
     clipboard: Text.t ref;
   }
 
@@ -21,6 +22,7 @@ let add x y cursors =
       selection_start_y = y;
       x;
       y;
+      preferred_x = x;
       clipboard = ref Text.empty;
     }
   in
@@ -66,6 +68,7 @@ let map_marks f cursors =
       selection_start_y = new_sy;
       x = new_x;
       y = new_y;
+      preferred_x = new_x;
       clipboard = cursor.clipboard;
     }
   in
@@ -167,3 +170,6 @@ let delete ~x ~y ~characters ~lines cursors =
     )
   in
   map_marks move_mark cursors
+
+let map f cursors =
+  List.map f cursors

@@ -1041,3 +1041,20 @@ let symbol key =
     | Unicode s -> Unicode s
 
     | _ -> Control
+
+module Ordered =
+struct
+  type key = t
+  type t = key
+  let compare = (Pervasives.compare: t -> t -> int)
+end
+
+module Set = Set.Make (Ordered)
+
+module Map =
+struct
+  include Map.Make (Ordered)
+
+  let of_list bindings =
+    List.fold_left (fun acc (key, value) -> add key value acc) empty bindings
+end
