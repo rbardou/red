@@ -31,7 +31,7 @@ let make_view_status (view: File.view) =
           Printf.sprintf "(%d cursors)" (List.length cursors)
   in
 
-  Printf.sprintf "%s %s" filename cursors
+  String.concat " " [ filename; cursors ]
 
 let status_bar_style_without_focus =
   Render.style ~bg_color: White ~fg_color: Black ()
@@ -46,6 +46,7 @@ let status_bar_style has_focus =
     status_bar_style_without_focus
 
 let render focused_panel (frame: Render.frame) panel ~x ~y ~w ~h =
+  let file = panel.view.file in
   let has_focus = panel == focused_panel in
   let scroll_x = panel.view.scroll_x in
   let scroll_y = panel.view.scroll_y in
@@ -57,7 +58,7 @@ let render focused_panel (frame: Render.frame) panel ~x ~y ~w ~h =
   in
 
   (* Text area. *)
-  let text = panel.view.file.text in
+  let text = file.text in
   for text_y = scroll_y to scroll_y + h - 2 do
     for text_x = scroll_x to scroll_x + w - 1 do
       let character =
@@ -89,5 +90,13 @@ let render focused_panel (frame: Render.frame) panel ~x ~y ~w ~h =
   done;
 
   (* Status bar. *)
-  Render.text ~style: (status_bar_style has_focus) frame x (y + h - 1) w
-    (make_view_status panel.view)
+  let status_y = y + h - 1 in
+  let style = status_bar_style has_focus in
+  Render.set frame x status_y (
+    if file.modified then
+      Render.cell ~style: { style with fg_color = Black; bg_color = Red } "*"
+    else
+      Render.cell ~style " "
+  );
+  Render.set frame (x + 1) status_y (Render.cell ~style " ");
+  Render.text ~style frame (x + 2) status_y (w - 2) (make_view_status panel.view)

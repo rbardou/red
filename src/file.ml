@@ -34,6 +34,7 @@ type t =
   {
     mutable views: view list;
     mutable text: Text.t;
+    mutable modified: bool;
     mutable filename: string option;
 
     (* If [loading] is [Some (loaded, size, sub_strings_rev)], only [loaded] bytes out of [size]
@@ -74,6 +75,7 @@ let create text =
   {
     views = [];
     text;
+    modified = false;
     filename = None;
     loading = None;
   }
@@ -264,8 +266,10 @@ let update_all_marks_after_delete ~x ~y ~characters ~lines views =
 let set_text file text =
   if is_read_only file then
     invalid_arg "set_text: file is read-only"
-  else
-    file.text <- text
+  else (
+    file.text <- text;
+    file.modified <- true;
+  )
 
 let delete_selection view cursor =
   (* Compute region. *)
