@@ -26,6 +26,10 @@ let cursor_is_in_selection x y cursor =
   let xy = { x; y } in
   left <=% xy && xy <% right
 
+let selection_is_empty cursor =
+  cursor.position.x = cursor.selection_start.x &&
+  cursor.position.y = cursor.selection_start.y
+
 type t =
   {
     mutable views: view list;
@@ -118,12 +122,6 @@ let is_read_only file =
         false
     | Some _ ->
         true
-
-let if_writable view f =
-  if is_read_only view.file then
-    Log.error "buffer is read-only"
-  else
-    f ()
 
 let foreach_view file f =
   List.iter f file.views
@@ -255,10 +253,21 @@ let update_marks_after_delete ~x ~y ~characters ~lines marks =
   in
   List.iter move_mark marks
 
-let delete_selection view =
-  if_writable view @@ fun () ->
-  foreach_cursor view @@ fun cursor ->
+let update_all_marks_after_insert ~x ~y ~characters ~lines views =
+  let update_view view = update_marks_after_insert ~x ~y ~characters ~lines view.marks in
+  List.iter update_view views
 
+let update_all_marks_after_delete ~x ~y ~characters ~lines views =
+  let update_view view = update_marks_after_delete ~x ~y ~characters ~lines view.marks in
+  List.iter update_view views
+
+let set_text file text =
+  if is_read_only file then
+    invalid_arg "set_text: file is read-only"
+  else
+    file.text <- text
+
+let delete_selection view cursor =
   (* Compute region. *)
   let left, right = selection_boundaries cursor in
   let { x; y } = left in
@@ -271,39 +280,80 @@ let delete_selection view =
   in
 
   (* Delete selection. *)
-  view.file.text <- Text.delete_region ~x ~y ~characters ~lines view.file.text;
+  set_text view.file (Text.delete_region ~x ~y ~characters ~lines view.file.text);
+  update_all_marks_after_delete ~x ~y ~characters ~lines view.file.views
 
-  (* We modified the text, so we must move marks. *)
-  let update_view view = update_marks_after_delete ~x ~y ~characters ~lines view.marks in
-  List.iter update_view view.file.views
+let insert_character (character: Character.t) view cursor =
+  set_text view.file (Text.insert_character cursor.position.x cursor.position.y character view.file.text);
+  update_all_marks_after_insert ~x: cursor.position.x ~y: cursor.position.y ~characters: 1 ~lines: 0 view.file.views
 
-let insert_character (character: Character.t) view =
-  if_writable view @@ fun () ->
-  foreach_cursor view @@ fun cursor ->
+let insert_new_line view cursor =
+  set_text view.file (Text.insert_new_line cursor.position.x cursor.position.y view.file.text);
+  update_all_marks_after_insert ~x: cursor.position.x ~y: cursor.position.y ~characters: 0 ~lines: 1 view.file.views
 
-  (* Insert character into text. *)
-  view.file.text <- Text.insert_character cursor.position.x cursor.position.y character view.file.text;
+let delete_character view cursor =
+  let { x; y } = cursor.position in
+  let text = view.file.text in
+  let length = Text.get_line_length y text in
+  let characters, lines = if x < length then 1, 0 else 0, 1 in
+  set_text view.file (Text.delete_region ~x ~y ~characters ~lines text);
+  update_all_marks_after_delete ~x ~y ~characters ~lines view.file.views
 
-  (* We modified the text, so we must move marks that are after what we inserted. *)
-  let update_view view =
-    update_marks_after_insert ~x: cursor.position.x ~y: cursor.position.y ~characters: 1 ~lines: 0 view.marks
-  in
-  List.iter update_view view.file.views
-
-let insert_new_line view =
-  if_writable view @@ fun () ->
-  foreach_cursor view @@ fun cursor ->
-
-  (* Insert character into text. *)
-  view.file.text <- Text.insert_new_line cursor.position.x cursor.position.y view.file.text;
-
-  (* We modified the text, so we must move marks that are after what we inserted. *)
-  let update_view view =
-    update_marks_after_insert ~x: cursor.position.x ~y: cursor.position.y ~characters: 0 ~lines: 1 view.marks
-  in
-  List.iter update_view view.file.views
+let delete_character_backwards view cursor =
+  let { x; y } = cursor.position in
+  if x > 0 then
+    let text = view.file.text in
+    let x = x - 1 in
+    let characters = 1 in
+    let lines = 0 in
+    set_text view.file (Text.delete_region ~x ~y ~characters ~lines text);
+    update_all_marks_after_delete ~x ~y ~characters ~lines view.file.views
+  else if y > 0 then
+    let text = view.file.text in
+    let y = y - 1 in
+    let x = Text.get_line_length y text in
+    let characters = 0 in
+    let lines = 1 in
+    set_text view.file (Text.delete_region ~x ~y ~characters ~lines text);
+    update_all_marks_after_delete ~x ~y ~characters ~lines view.file.views
 
 let reset_preferred_x file =
   foreach_view file @@ fun view ->
   foreach_cursor view @@ fun cursor ->
   cursor.preferred_x <- cursor.position.x
+
+let edit view f =
+  if is_read_only view.file then
+    Log.error "buffer is read-only"
+  else (
+    f view;
+    reset_preferred_x view.file
+  )
+
+let replace_selection_by_character character view =
+  edit view @@ fun view ->
+  foreach_cursor view @@ fun cursor ->
+  delete_selection view cursor;
+  insert_character character view cursor
+
+let replace_selection_by_new_line view =
+  edit view @@ fun view ->
+  foreach_cursor view @@ fun cursor ->
+  delete_selection view cursor;
+  insert_new_line view cursor
+
+let delete_selection_or_character view =
+  edit view @@ fun view ->
+  foreach_cursor view @@ fun cursor ->
+  if selection_is_empty cursor then
+    delete_character view cursor
+  else
+    delete_selection view cursor
+
+let delete_selection_or_character_backwards view =
+  edit view @@ fun view ->
+  foreach_cursor view @@ fun cursor ->
+  if selection_is_empty cursor then
+    delete_character_backwards view cursor
+  else
+    delete_selection view cursor

@@ -54,6 +54,8 @@ let main () =
   Alt_up => "focus_up";
 
   Return => "insert_new_line";
+  Delete => "delete_character";
+  Backspace => "delete_character_backwards";
 
   Term_run.run_raw_mode
     ~on_key_press: (State.on_key_press state)

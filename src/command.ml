@@ -114,4 +114,9 @@ let () = define "focus_left" @@ focus_relative Layout.get_panel_left
 let () = define "focus_down" @@ focus_relative Layout.get_panel_down
 let () = define "focus_up" @@ focus_relative Layout.get_panel_up
 
-let () = define "insert_new_line" @@ State.replace_selection_by_new_line
+let () = define "insert_new_line" @@ fun state -> File.replace_selection_by_new_line state.focus.view
+
+let () = define "delete_character" @@ fun state ->
+  File.delete_selection_or_character state.focus.view
+let () = define "delete_character_backwards" @@ fun state ->
+  File.delete_selection_or_character_backwards state.focus.view
