@@ -47,6 +47,8 @@ and view =
     file: t;
     mutable scroll_x: int;
     mutable scroll_y: int;
+    mutable width: int; (* set when rendering *)
+    mutable height: int; (* set when rendering *)
     mutable marks: mark list;
     mutable cursors: cursor list;
   }
@@ -64,6 +66,8 @@ let create_view file =
       file;
       scroll_x = 0;
       scroll_y = 0;
+      width = 80;
+      height = 40;
       marks = [ cursor.selection_start; cursor.position ];
       cursors = [ cursor ];
     }

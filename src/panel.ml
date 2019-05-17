@@ -46,6 +46,8 @@ let status_bar_style has_focus =
     status_bar_style_without_focus
 
 let render focused_panel (frame: Render.frame) panel ~x ~y ~w ~h =
+  panel.view.width <- w;
+  panel.view.height <- h;
   let file = panel.view.file in
   let has_focus = panel == focused_panel in
   let scroll_x = panel.view.scroll_x in

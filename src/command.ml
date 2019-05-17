@@ -16,6 +16,23 @@ let bind (state: State.t) key name =
 (*                                   Helpers                                  *)
 (******************************************************************************)
 
+let recenter_y (view: File.view) (cursor: File.cursor) =
+  view.scroll_y <- max 0 (cursor.position.y - view.height / 2)
+
+let recenter_x (view: File.view) (cursor: File.cursor) =
+  view.scroll_x <- max 0 (cursor.position.x - view.width / 2)
+
+let recenter_if_needed (state: State.t) =
+  let view = state.focus.view in
+  match view.cursors with
+    | [ cursor ] ->
+        if cursor.position.x < view.scroll_x || cursor.position.x >= view.scroll_x + view.width - 1 then
+          recenter_x view cursor;
+        if cursor.position.y < view.scroll_y || cursor.position.y >= view.scroll_y + view.height - 1 then
+          recenter_y view cursor
+    | _ ->
+        ()
+
 (* Change cursor position (apply [f] to get new coordinates).
    Update [preferred_x] unless [vertical].
    Reset selection if [reset_selection]. *)
@@ -33,7 +50,8 @@ let move reset_selection vertical f (state: State.t) =
     position.y <- y;
     cursor.preferred_x <- if vertical then cursor.preferred_x else x;
   in
-  File.foreach_cursor state.focus.view move
+  File.foreach_cursor state.focus.view move;
+  recenter_if_needed state
 
 let move_right text x y =
   if x >= Text.get_line_length y text then
@@ -114,9 +132,14 @@ let () = define "focus_left" @@ focus_relative Layout.get_panel_left
 let () = define "focus_down" @@ focus_relative Layout.get_panel_down
 let () = define "focus_up" @@ focus_relative Layout.get_panel_up
 
-let () = define "insert_new_line" @@ fun state -> File.replace_selection_by_new_line state.focus.view
+let () = define "insert_new_line" @@ fun state ->
+  File.replace_selection_by_new_line state.focus.view;
+  recenter_if_needed state
 
 let () = define "delete_character" @@ fun state ->
-  File.delete_selection_or_character state.focus.view
+  File.delete_selection_or_character state.focus.view;
+  recenter_if_needed state
+
 let () = define "delete_character_backwards" @@ fun state ->
-  File.delete_selection_or_character_backwards state.focus.view
+  File.delete_selection_or_character_backwards state.focus.view;
+  recenter_if_needed state
