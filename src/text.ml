@@ -58,13 +58,23 @@ let get_line_length y (text: t) =
 let insert_character x y character (text: t) =
   match Sequence.get y text with
     | None ->
-        (* No line at [y], insert new line. *)
-        Sequence.insert y (Line.one character) text
+        text
     | Some line ->
         (* Insert in line. *)
         let line = Line.insert x character line in
         (* Replace line. *)
         Sequence.set y line text
+
+let insert_new_line x y (text: t) =
+  match Sequence.get y text with
+    | None ->
+        text
+    | Some line ->
+        (* Split line, only keep the left part in it. *)
+        let left, right = Line.split x line in
+        let text = Sequence.set y left text in
+        (* Add the right part as a new line. *)
+        Sequence.insert (y + 1) right text
 
 let delete_region ~x ~y ~characters ~lines (text: t) =
   if lines = 0 then

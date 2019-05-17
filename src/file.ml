@@ -290,6 +290,19 @@ let insert_character (character: Character.t) view =
   in
   List.iter update_view view.file.views
 
+let insert_new_line view =
+  if_writable view @@ fun () ->
+  foreach_cursor view @@ fun cursor ->
+
+  (* Insert character into text. *)
+  view.file.text <- Text.insert_new_line cursor.position.x cursor.position.y view.file.text;
+
+  (* We modified the text, so we must move marks that are after what we inserted. *)
+  let update_view view =
+    update_marks_after_insert ~x: cursor.position.x ~y: cursor.position.y ~characters: 0 ~lines: 1 view.marks
+  in
+  List.iter update_view view.file.views
+
 let reset_preferred_x file =
   foreach_view file @@ fun view ->
   foreach_cursor view @@ fun cursor ->

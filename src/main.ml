@@ -53,6 +53,8 @@ let main () =
   Alt_down => "focus_down";
   Alt_up => "focus_up";
 
+  Return => "insert_new_line";
+
   Term_run.run_raw_mode
     ~on_key_press: (State.on_key_press state)
     ~on_render: (State.render state)

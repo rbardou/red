@@ -89,8 +89,7 @@ let focus_relative get (state: State.t) =
 (*                                 Definitions                                *)
 (******************************************************************************)
 
-let () = define "quit" @@ fun state ->
-  raise State.Exit
+let () = define "quit" @@ fun state -> raise State.Exit
 
 let () = define "move_right" @@ move true false move_right
 let () = define "move_left" @@ move true false move_left
@@ -114,3 +113,5 @@ let () = define "focus_right" @@ focus_relative Layout.get_panel_right
 let () = define "focus_left" @@ focus_relative Layout.get_panel_left
 let () = define "focus_down" @@ focus_relative Layout.get_panel_down
 let () = define "focus_up" @@ focus_relative Layout.get_panel_up
+
+let () = define "insert_new_line" @@ State.replace_selection_by_new_line
