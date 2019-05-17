@@ -16,6 +16,9 @@ let bind (state: State.t) key name =
 (*                                   Helpers                                  *)
 (******************************************************************************)
 
+(* Change cursor position (apply [f] to get new coordinates).
+   Update [preferred_x] unless [vertical].
+   Reset selection if [reset_selection]. *)
 let move reset_selection vertical f (state: State.t) =
   let text = state.focus.view.file.text in
   let move (cursor: File.cursor) =
@@ -62,6 +65,19 @@ let move_up text x y =
   else
     min x (Text.get_line_length (y - 1) text), y - 1
 
+let move_end_of_line text _ y =
+  Text.get_line_length y text, y
+
+let move_beginning_of_line text _ y =
+  0, y
+
+let move_end_of_file text _ _ =
+  let y = Text.get_line_count text - 1 in
+  Text.get_line_length y text, y
+
+let move_beginning_of_file text _ _ =
+  0, 0
+
 let focus_relative get (state: State.t) =
   match get state.focus state.layout with
     | None ->
@@ -80,11 +96,19 @@ let () = define "move_right" @@ move true false move_right
 let () = define "move_left" @@ move true false move_left
 let () = define "move_down" @@ move true true move_down
 let () = define "move_up" @@ move true true move_up
+let () = define "move_end_of_line" @@ move true false move_end_of_line
+let () = define "move_beginning_of_line" @@ move true false move_beginning_of_line
+let () = define "move_end_of_file" @@ move true false move_end_of_file
+let () = define "move_beginning_of_file" @@ move true false move_beginning_of_file
 
 let () = define "select_right" @@ move false false move_right
 let () = define "select_left" @@ move false false move_left
 let () = define "select_down" @@ move false true move_down
 let () = define "select_up" @@ move false true move_up
+let () = define "select_end_of_line" @@ move false false move_end_of_line
+let () = define "select_beginning_of_line" @@ move false false move_beginning_of_line
+let () = define "select_end_of_file" @@ move false false move_end_of_file
+let () = define "select_beginning_of_file" @@ move false false move_beginning_of_file
 
 let () = define "focus_right" @@ focus_relative Layout.get_panel_right
 let () = define "focus_left" @@ focus_relative Layout.get_panel_left

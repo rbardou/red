@@ -34,11 +34,19 @@ let main () =
   Left => "move_left";
   Down => "move_down";
   Up => "move_up";
+  End => "move_end_of_line";
+  Home => "move_beginning_of_line";
+  Ctrl_end => "move_end_of_file";
+  Ctrl_home => "move_beginning_of_file";
 
   Shift_right => "select_right";
   Shift_left => "select_left";
   Shift_down => "select_down";
   Shift_up => "select_up";
+  Shift_end => "select_end_of_line";
+  Shift_home => "select_beginning_of_line";
+  Ctrl_shift_end => "select_end_of_file";
+  Ctrl_shift_home => "select_beginning_of_file";
 
   Alt_right => "focus_right";
   Alt_left => "focus_left";
