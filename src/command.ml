@@ -1,5 +1,13 @@
 module String_map = Map.Make (String)
 
+module Int =
+struct
+  type t = int
+  let compare = (Pervasives.compare: int -> int -> int)
+end
+
+module Int_set = Set.Make (Int)
+
 let commands = ref String_map.empty
 
 let define name (f: State.t -> unit) =
@@ -143,3 +151,27 @@ let () = define "delete_character" @@ fun state ->
 let () = define "delete_character_backwards" @@ fun state ->
   File.delete_selection_or_character_backwards state.focus.view;
   recenter_if_needed state
+
+let () = define "create_cursors_from_selection" @@ fun state ->
+  let view = state.focus.view in
+
+  (* Compute the list of y coordinates. *)
+  let rec gather_cursors lines (cursor: File.cursor) =
+    let rec gather_lines lines start finish =
+      if finish < start then
+        lines
+      else
+        let lines = Int_set.add finish lines in
+        gather_lines lines start (finish - 1)
+    in
+    let left, right = File.selection_boundaries cursor in
+    gather_lines lines left.y right.y
+  in
+  let lines =
+    view.cursors
+    |> List.fold_left gather_cursors Int_set.empty
+    |> Int_set.elements
+  in
+
+  (* Replace cursors with new cursors. *)
+  File.set_cursors view (List.map (File.create_cursor 0) lines)

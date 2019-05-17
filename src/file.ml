@@ -53,14 +53,15 @@ and view =
     mutable cursors: cursor list;
   }
 
+let create_cursor x y =
+  {
+    selection_start = { x; y };
+    position = { x; y };
+    preferred_x = x;
+  }
+
 let create_view file =
-  let cursor =
-    {
-      selection_start = { x = 0; y = 0 };
-      position = { x = 0; y = 0 };
-      preferred_x = 0;
-    }
-  in
+  let cursor = create_cursor 0 0 in
   let view =
     {
       file;
@@ -274,6 +275,15 @@ let set_text file text =
     file.text <- text;
     file.modified <- true;
   )
+
+let set_cursors view cursors =
+  let marks =
+    cursors
+    |> List.map (fun cursor -> [ cursor.selection_start; cursor.position ])
+    |> List.flatten
+  in
+  view.cursors <- cursors;
+  view.marks <- marks
 
 let delete_selection view cursor =
   (* Compute region. *)
