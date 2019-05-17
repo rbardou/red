@@ -8,20 +8,30 @@ let create view =
     view;
   }
 
-let make_file_status (file: File.t) =
+let make_view_status (view: File.view) =
+  let file = view.file in
+
   let filename =
     match file.filename with
       | None ->
           "(unnamed file)"
       | Some filename ->
-          filename
+          match file.loading with
+            | None ->
+                filename
+            | Some (loaded, size, _) ->
+                Printf.sprintf "%s (Loading: %d%%)" filename (loaded * 100 / size)
   in
 
-  match file.loading with
-    | None ->
-        filename
-    | Some (loaded, size, _) ->
-        Printf.sprintf "%s (Loading: %d%%)" filename (loaded * 100 / size)
+  let cursors =
+    match view.cursors with
+      | [ cursor ] ->
+          Printf.sprintf "(%d, %d)" cursor.position.x cursor.position.y
+      | cursors ->
+          Printf.sprintf "(%d cursors)" (List.length cursors)
+  in
+
+  Printf.sprintf "%s %s" filename cursors
 
 let status_bar_style_without_focus =
   Render.style ~bg_color: White ~fg_color: Black ()
@@ -80,4 +90,4 @@ let render focused_panel (frame: Render.frame) panel ~x ~y ~w ~h =
 
   (* Status bar. *)
   Render.text ~style: (status_bar_style has_focus) frame x (y + h - 1) w
-    (make_file_status panel.view.file)
+    (make_view_status panel.view)
