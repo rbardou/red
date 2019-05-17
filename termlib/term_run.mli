@@ -4,9 +4,6 @@
 
     Call [on_key_press] for each received key press.
 
-    Call [on_size_changed] when terminal size changed.
-    Note that you should not call [size_changed] yourself if you use [spawn_input_reader].
-
     Call [on_cursor_position] for each received cursor position, that
     you can query with [query_cursor_position].
 
@@ -15,7 +12,6 @@
     You still need to run [Spawn.run] yourself. *)
 val spawn_input_reader:
   on_key_press: (Key.t -> unit) ->
-  ?on_size_changed: (unit -> unit) ->
   ?on_cursor_position: (int -> int -> unit) ->
   ?state: Term.input_state ->
   unit -> unit

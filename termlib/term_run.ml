@@ -1,10 +1,8 @@
 let rec spawn_input_reader
     ~on_key_press
-    ?(on_size_changed = fun () -> ())
     ?(on_cursor_position = fun _ _ -> ())
     ?(state = Term.Empty)
     () =
-  if Term.size_changed () then on_size_changed ();
   Spawn.on_read Unix.stdin @@ fun () ->
 
   let buf = Bytes.create 1024 in
@@ -20,7 +18,6 @@ let rec spawn_input_reader
     if i >= len then
       spawn_input_reader
         ~on_key_press
-        ~on_size_changed
         ~on_cursor_position
         ~state
         ()
@@ -61,12 +58,12 @@ let run_raw_mode
 
   spawn_input_reader
     ~on_key_press
-    ~on_size_changed: on_size_changed
     ~on_cursor_position: on_resize
     ();
 
   let previous_frame = ref None in
   let on_iterate () =
+    if Term.size_changed () then on_size_changed ();
     (* TODO: if we already rendered something less than, say, 1ms ago, do not render again;
        instead, and only there isn't one already, spawn a thread which will render a little later. *)
     let w = !width in

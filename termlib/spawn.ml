@@ -144,11 +144,15 @@ let run_once () =
       not (File_descr_map.is_empty pending_writes) ||
       timeout > 0.
     then
-      Unix.select
-        (File_descr_map.keys pending_reads)
-        (File_descr_map.keys pending_writes)
-        []
-        timeout
+      try
+        Unix.select
+          (File_descr_map.keys pending_reads)
+          (File_descr_map.keys pending_writes)
+          []
+          timeout
+      with Unix.Unix_error _ ->
+        (* Maybe interrupted because of a signal or something. *)
+        [], [], []
     else
       [], [], []
   in
