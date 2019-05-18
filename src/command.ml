@@ -22,7 +22,7 @@ let bind context (state: State.t) key name =
   let command =
     match String_map.find name !commands with
       | exception Not_found ->
-          Log.errorf "unbound command: %s" name;
+          Log.error "unbound command: %s" name;
           (fun _ -> ())
       | command ->
           command
@@ -35,6 +35,12 @@ let bind context (state: State.t) key name =
 (******************************************************************************)
 (*                                   Helpers                                  *)
 (******************************************************************************)
+
+let abort ?exn reason =
+  Log.error ?exn "%s" reason;
+  raise State.Abort
+
+let abort ?exn x = Printf.ksprintf (abort ?exn) x
 
 let recenter_y (view: File.view) (cursor: File.cursor) =
   view.scroll_y <- max 0 (cursor.position.y - view.height / 2)
@@ -149,21 +155,32 @@ let select_all view =
 let remove_panel panel (state: State.t) =
   match Layout.remove_panel panel state.layout with
     | None ->
-        Log.error "cannot remove last panel"
+        abort "cannot remove last panel"
     | Some (new_layout, next_panel) ->
         (* TODO: also remove prompt panels (recursively) *)
         State.set_layout state new_layout;
         state.focus <- next_panel
 
 let save (file: File.t) filename =
-  (* TODO: choose a temporary filename, and move the file after that *)
-  file.filename <- Some filename;
-  match Text.output_file filename file.text with
-    | Ok () ->
-        file.modified <- false;
-        Log.infof "Wrote: %s" filename
-    | Error exn ->
-        Log.error (Printexc.to_string exn)
+  if filename <> "" then (
+    file.filename <- Some filename;
+
+    if not (System.file_exists filename) then
+      (
+        Text.output_file filename file.text;
+        Log.info "Wrote: %s" filename
+      )
+    else
+      (
+        let temporary_filename = System.find_temporary_filename filename in
+        Text.output_file temporary_filename file.text;
+        Log.info "Wrote: %s" temporary_filename;
+        System.move_file temporary_filename filename;
+        Log.info "Moved to: %s" filename
+      );
+
+    file.modified <- false
+  )
 
 (******************************************************************************)
 (*                                 Definitions                                *)
@@ -205,8 +222,7 @@ let () = define "save_as" @@ fun state ->
     in
     match Layout.replace_panel state.focus new_sublayout state.layout with
       | None ->
-          Log.error "focused panel is not in current layout";
-          state.layout
+          abort "focused panel is not in current layout"
       | Some new_layout ->
           new_layout
   in
@@ -315,4 +331,4 @@ let () = define "validate" @@ fun state ->
         remove_panel panel state;
         validate panel.view.file.text
     | _ ->
-        Log.error "focused panel is not a prompt"
+        abort "focused panel is not a prompt"

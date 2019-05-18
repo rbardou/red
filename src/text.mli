@@ -9,8 +9,10 @@ val empty: t
 (** A text with only one non-empty line. *)
 val one_line: Line.t -> t
 
-(** Output to file. *)
-val output_file: string -> t -> (unit, exn) result
+(** Output to file.
+
+    May raise [System.Error]. *)
+val output_file: string -> t -> unit
 
 (** Convert to a string. *)
 val to_string: t -> string

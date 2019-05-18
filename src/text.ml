@@ -16,14 +16,8 @@ let output_channel ch (text: t) =
   Sequence.iter output_line text
 
 let output_file filename (text: t) =
-  let ch = open_out filename in
-  try
-    output_channel ch text;
-    close_out ch;
-    Ok ()
-  with exn ->
-    close_out ch;
-    Error exn
+  System.with_open_out filename @@ fun ch ->
+  output_channel ch text
 
 let to_string (text: t) =
   (* TODO: compute buffer size? We expect [to_string] to be used for small texts only. *)
