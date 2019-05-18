@@ -12,6 +12,9 @@ val one_line: Line.t -> t
 (** Output to file. *)
 val output_file: string -> t -> (unit, exn) result
 
+(** Convert to a string. *)
+val to_string: t -> string
+
 (** Make a text from a list of substrings.
 
     Each substring is of the form: [(string, len)]

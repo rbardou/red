@@ -184,6 +184,6 @@ let rec run ?(on_iterate = fun () -> ()) () =
     | [] ->
         ()
     | _ :: _ ->
-        run_once ();
         on_iterate ();
+        run_once ();
         run ~on_iterate ()

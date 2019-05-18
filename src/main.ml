@@ -8,29 +8,28 @@ let main () =
     in
     let panel_1 =
       let view = File.create_view file in
-      Panel.create view
+      Panel.create File view
     in
     let panel_2 =
       let view = File.create_view file in
-      Panel.create view
+      Panel.create File view
     in
     let panel_3 =
       let view = File.create_view file in
-      Panel.create view
+      Panel.create File view
     in
     let layout =
-      Layout.vertical_split
-        (Layout.horizontal_split ~line: true (Layout.single panel_1) (Layout.single panel_2))
+      Layout.split Vertical
+        (Layout.split Horizontal ~sep: true (Layout.single panel_1) (Layout.single panel_2))
         (Layout.single panel_3)
     in
     State.create layout
   in
 
-  let (=>) = Command.bind state in
+  (* Global Bindings *)
+  let (=>) = Command.bind Global state in
 
-  Ctrl_q => "quit";
-  Ctrl_s => "save";
-  Alt_ctrl_s => "save_as";
+  Alt_escape => "quit";
   F4 => "remove_panel"; (* TODO: better binding? *)
 
   Right => "move_right";
@@ -68,6 +67,17 @@ let main () =
   Ctrl_c => "copy";
   Ctrl_x => "cut";
   Ctrl_v => "paste";
+
+  (* File Bindings *)
+  let (=>) = Command.bind File state in
+
+  Ctrl_s => "save";
+  Alt_ctrl_s => "save_as";
+
+  (* Prompt Bindings *)
+  let (=>) = Command.bind Prompt state in
+
+  Return => "validate";
 
   Term_run.run_raw_mode
     ~on_key_press: (State.on_key_press state)

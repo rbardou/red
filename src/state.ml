@@ -2,7 +2,12 @@ type t =
   {
     mutable layout: Layout.t;
     mutable focus: Panel.t;
-    mutable bindings: (t -> unit) Key.Map.t;
+
+    (* Global bindings can be overridden by local bindings. *)
+    mutable global_bindings: (t -> unit) Key.Map.t;
+    mutable file_bindings: (t -> unit) Key.Map.t;
+    mutable prompt_bindings: (t -> unit) Key.Map.t;
+
     clipboard: Clipboard.t;
   }
 
@@ -10,31 +15,42 @@ let create ?focus layout =
   let focus =
     match focus with
       | None ->
-          Layout.get_top_left_panel layout
+          Layout.get_main_panel layout
       | Some focus ->
           focus
   in
   {
     layout;
     focus;
-    bindings = Key.Map.empty;
+    global_bindings = Key.Map.empty;
+    file_bindings = Key.Map.empty;
+    prompt_bindings = Key.Map.empty;
     clipboard = { text = Text.empty };
   }
 
 exception Exit
 
 let on_key_press state (key: Key.t) =
-  match Key.Map.find key state.bindings with
+  let local_bindings =
+    match state.focus.kind with
+      | File -> state.file_bindings
+      | Prompt _ -> state.prompt_bindings
+  in
+  match Key.Map.find key local_bindings with
     | command ->
         command state
     | exception Not_found ->
-        match Key.symbol key with
-          | ASCII char ->
-              File.replace_selection_by_character (String.make 1 char) state.focus.view
-          | Unicode character ->
-              File.replace_selection_by_character character state.focus.view
-          | Control ->
-              Log.infof "unbound key: %s" (Key.show key)
+        match Key.Map.find key state.global_bindings with
+          | command ->
+              command state
+          | exception Not_found ->
+              match Key.symbol key with
+                | ASCII char ->
+                    File.replace_selection_by_character (String.make 1 char) state.focus.view
+                | Unicode character ->
+                    File.replace_selection_by_character character state.focus.view
+                | Control ->
+                    Log.infof "unbound key: %s" (Key.show key)
 
 let render state frame =
   Layout.render

@@ -1,10 +1,20 @@
 (** Panel layouts. *)
 
+(** How to split a layout. *)
+type split_direction =
+  | Vertical (** top and bottom *)
+  | Horizontal (** left and right *)
+
 (** Where to split a layout. *)
 type split_position =
   | Absolute_first of int (** set the size of the top or left sublayout, and the other one takes the rest *)
   | Absolute_second of int (** set the size of the bottom or right sublayout, and the other one takes the rest *)
   | Ratio of int * int (** numerator, denominator: denotes a fraction of the parent's size *)
+
+(** The main sublayout to pick with [get_main_panel]. *)
+type split_main =
+  | First
+  | Second
 
 (** Panel layouts. *)
 type t
@@ -12,14 +22,11 @@ type t
 (** A layout with a single panel. *)
 val single: Panel.t -> t
 
-(** A layout split between top and bottom. *)
-val vertical_split: ?pos: split_position -> ?line: bool -> t -> t -> t
+(** A layout split in two. *)
+val split: split_direction -> ?pos: split_position -> ?sep: bool -> ?main: split_main -> t -> t -> t
 
-(** A layout split between left and right. *)
-val horizontal_split: ?pos: split_position -> ?line: bool -> t -> t -> t
-
-(** Get the top-left panel of a layout. *)
-val get_top_left_panel: t -> Panel.t
+(** Get the main panel of a layout. *)
+val get_main_panel: t -> Panel.t
 
 (** Render a layout by computing panel positions and calling a render function on them. *)
 val render:

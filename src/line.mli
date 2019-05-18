@@ -15,6 +15,9 @@ val of_list: Character.t list -> t
 (** Make a line from a UTF8-encoded string. *)
 val of_utf8_string: string -> t
 
+(** Add a line to a buffer. *)
+val to_buffer: Buffer.t -> t -> unit
+
 (** Get a character from its index in a line. *)
 val get: int -> t -> Character.t option
 

@@ -7,18 +7,36 @@ type split_position =
   | Absolute_second of int
   | Ratio of int * int
 
+type split_main =
+  | First
+  | Second
+
 type t =
   | Single of Panel.t
-  | Split of split_direction * split_position * bool * t * t (* draw split line, top or left, bottom or right *)
+  | Split of split
+
+and split =
+  {
+    direction: split_direction;
+    position: split_position;
+    separator: bool;
+    first: t;
+    second: t;
+    main: split_main;
+  }
 
 let single panel =
   Single panel
 
-let vertical_split ?(pos = Ratio (1, 2)) ?(line = false) top bottom =
-  Split (Vertical, pos, line, top, bottom)
-
-let horizontal_split ?(pos = Ratio (1, 2)) ?(line = false) left right =
-  Split (Horizontal, pos, line, left, right)
+let split direction ?(pos = Ratio (1, 2)) ?(sep = false) ?(main = First) first second =
+  Split {
+    direction;
+    position = pos;
+    separator = sep;
+    first;
+    second;
+    main;
+  }
 
 let line_style =
   Render.style ~bg_color: White ~fg_color: Black ()
@@ -44,66 +62,66 @@ let rec render render_panel frame ?(x = 0) ?(y = 0) ~w ~h layout: unit =
     | Single panel ->
         render_panel frame panel ~x ~y ~w ~h
 
-    | Split (Vertical, Absolute_first size, false, top, bottom) ->
-        render render_panel frame ~x ~y ~w ~h: size top;
-        render render_panel frame ~x ~y: (y + size) ~w ~h: (h - size) bottom
-    | Split (Vertical, Absolute_second size, false, top, bottom) ->
-        render render_panel frame ~x ~y ~w ~h: (h - size) top;
-        render render_panel frame ~x ~y: (y + h - size) ~w ~h: size bottom
-    | Split (Vertical, Ratio (numerator, denumerator), false, top, bottom) ->
+    | Split { direction = Vertical; position = Absolute_first size; separator = false; first; second } ->
+        render render_panel frame ~x ~y ~w ~h: size first;
+        render render_panel frame ~x ~y: (y + size) ~w ~h: (h - size) second
+    | Split { direction = Vertical; position = Absolute_second size; separator = false; first; second } ->
+        render render_panel frame ~x ~y ~w ~h: (h - size) first;
+        render render_panel frame ~x ~y: (y + h - size) ~w ~h: size second
+    | Split { direction = Vertical; position = Ratio (numerator, denumerator); separator = false; first; second } ->
         let size = h * numerator / denumerator in
-        render render_panel frame ~x ~y ~w ~h: size top;
-        render render_panel frame ~x ~y: (y + size) ~w ~h: (h - size) bottom
+        render render_panel frame ~x ~y ~w ~h: size first;
+        render render_panel frame ~x ~y: (y + size) ~w ~h: (h - size) second
 
-    | Split (Horizontal, Absolute_first size, false, left, right) ->
-        render render_panel frame ~x ~y ~w: size ~h left;
-        render render_panel frame ~x: (x + size) ~y ~w: (w - size) ~h right
-    | Split (Horizontal, Absolute_second size, false, left, right) ->
-        render render_panel frame ~x ~y ~w: (w - size) ~h left;
-        render render_panel frame ~x: (x + w - size) ~y ~w: size ~h right
-    | Split (Horizontal, Ratio (numerator, denumerator), false, left, right) ->
+    | Split { direction = Horizontal; position = Absolute_first size; separator = false; first; second } ->
+        render render_panel frame ~x ~y ~w: size ~h first;
+        render render_panel frame ~x: (x + size) ~y ~w: (w - size) ~h second
+    | Split { direction = Horizontal; position = Absolute_second size; separator = false; first; second } ->
+        render render_panel frame ~x ~y ~w: (w - size) ~h first;
+        render render_panel frame ~x: (x + w - size) ~y ~w: size ~h second
+    | Split { direction = Horizontal; position = Ratio (numerator, denumerator); separator = false; first; second } ->
         let size = w * numerator / denumerator in
-        render render_panel frame ~x ~y ~w: size ~h left;
-        render render_panel frame ~x: (x + size) ~y ~w: (w - size) ~h right
+        render render_panel frame ~x ~y ~w: size ~h first;
+        render render_panel frame ~x: (x + size) ~y ~w: (w - size) ~h second
 
-    | Split (Vertical, Absolute_first size, true, top, bottom) ->
-        render render_panel frame ~x ~y ~w ~h: size top;
+    | Split { direction = Vertical; position = Absolute_first size; separator = true; first; second } ->
+        render render_panel frame ~x ~y ~w ~h: size first;
         render_horizontal_line frame (y + size) x w;
         let size = size + 1 in
-        render render_panel frame ~x ~y: (y + size) ~w ~h: (h - size) bottom
-    | Split (Vertical, Absolute_second size, true, top, bottom) ->
-        render render_panel frame ~x ~y ~w ~h: (h - size - 1) top;
+        render render_panel frame ~x ~y: (y + size) ~w ~h: (h - size) second
+    | Split { direction = Vertical; position = Absolute_second size; separator = true; first; second } ->
+        render render_panel frame ~x ~y ~w ~h: (h - size - 1) first;
         render_horizontal_line frame (y + h - size - 1) x w;
-        render render_panel frame ~x ~y: (y + h - size) ~w ~h: size bottom
-    | Split (Vertical, Ratio (numerator, denumerator), true, top, bottom) ->
+        render render_panel frame ~x ~y: (y + h - size) ~w ~h: size second
+    | Split { direction = Vertical; position = Ratio (numerator, denumerator); separator = true; first; second } ->
         let size = h * numerator / denumerator in
-        render render_panel frame ~x ~y ~w ~h: size top;
+        render render_panel frame ~x ~y ~w ~h: size first;
         render_horizontal_line frame (y + size) x w;
         let size = size + 1 in
-        render render_panel frame ~x ~y: (y + size) ~w ~h: (h - size) bottom
+        render render_panel frame ~x ~y: (y + size) ~w ~h: (h - size) second
 
-    | Split (Horizontal, Absolute_first size, true, left, right) ->
-        render render_panel frame ~x ~y ~w: size ~h left;
+    | Split { direction = Horizontal; position = Absolute_first size; separator = true; first; second } ->
+        render render_panel frame ~x ~y ~w: size ~h first;
         render_vertical_line frame (x + size) y h;
         let size = size + 1 in
-        render render_panel frame ~x: (x + size) ~y ~w: (w - size) ~h right
-    | Split (Horizontal, Absolute_second size, true, left, right) ->
-        render render_panel frame ~x ~y ~w: (w - size) ~h left;
+        render render_panel frame ~x: (x + size) ~y ~w: (w - size) ~h second
+    | Split { direction = Horizontal; position = Absolute_second size; separator = true; first; second } ->
+        render render_panel frame ~x ~y ~w: (w - size) ~h first;
         render_vertical_line frame (x + w - size - 1) y h;
-        render render_panel frame ~x: (x + w - size) ~y ~w: size ~h right
-    | Split (Horizontal, Ratio (numerator, denumerator), true, left, right) ->
+        render render_panel frame ~x: (x + w - size) ~y ~w: size ~h second
+    | Split { direction = Horizontal; position = Ratio (numerator, denumerator); separator = true; first; second } ->
         let size = w * numerator / denumerator in
-        render render_panel frame ~x ~y ~w: size ~h left;
+        render render_panel frame ~x ~y ~w: size ~h first;
         render_vertical_line frame (x + size) y h;
         let size = size + 1 in
-        render render_panel frame ~x: (x + size) ~y ~w: (w - size) ~h right
+        render render_panel frame ~x: (x + size) ~y ~w: (w - size) ~h second
 
-let rec get_top_left_panel layout =
+let rec get_main_panel layout =
   match layout with
     | Single panel ->
         panel
-    | Split (_, _, _, sublayout, _) ->
-        get_top_left_panel sublayout
+    | Split ({ main = First; first = main } | { main = Second; second = main }) ->
+        get_main_panel main
 
 type get_panel_result =
   | Panel_not_found
@@ -122,23 +140,23 @@ let get_panel_right panel layout =
             Found_panel
           else
             Panel_not_found
-      | Split (Vertical, _, _, top, bottom) ->
+      | Split { direction = Vertical; first; second } ->
           (
-            match find top with
+            match find first with
               | Panel_not_found ->
-                  find bottom
+                  find second
               | Found_panel ->
                   Found_panel
               | Found_result _ as x ->
                   x
           )
-      | Split (Horizontal, _, _, left, right) ->
+      | Split { direction = Horizontal; first; second } ->
           (
-            match find left with
+            match find first with
               | Panel_not_found ->
-                  find right
+                  find second
               | Found_panel ->
-                  Found_result (get_top_left_panel right)
+                  Found_result (get_main_panel second)
               | Found_result _ as x ->
                   x
           )
@@ -153,23 +171,23 @@ let get_panel_left panel layout =
             Found_panel
           else
             Panel_not_found
-      | Split (Vertical, _, _, top, bottom) ->
+      | Split { direction = Vertical; first; second } ->
           (
-            match find top with
+            match find first with
               | Panel_not_found ->
-                  find bottom
+                  find second
               | Found_panel ->
                   Found_panel
               | Found_result _ as x ->
                   x
           )
-      | Split (Horizontal, _, _, left, right) ->
+      | Split { direction = Horizontal; first; second } ->
           (
-            match find right with
+            match find second with
               | Panel_not_found ->
-                  find left
+                  find first
               | Found_panel ->
-                  Found_result (get_top_left_panel left)
+                  Found_result (get_main_panel first)
               | Found_result _ as x ->
                   x
           )
@@ -184,21 +202,21 @@ let get_panel_down panel layout =
             Found_panel
           else
             Panel_not_found
-      | Split (Vertical, _, _, top, bottom) ->
+      | Split { direction = Vertical; first; second } ->
           (
-            match find top with
+            match find first with
               | Panel_not_found ->
-                  find bottom
+                  find second
               | Found_panel ->
-                  Found_result (get_top_left_panel bottom)
+                  Found_result (get_main_panel second)
               | Found_result _ as x ->
                   x
           )
-      | Split (Horizontal, _, _, left, right) ->
+      | Split { direction = Horizontal; first; second } ->
           (
-            match find right with
+            match find second with
               | Panel_not_found ->
-                  find left
+                  find first
               | Found_panel ->
                   Found_panel
               | Found_result _ as x ->
@@ -215,21 +233,21 @@ let get_panel_up panel layout =
             Found_panel
           else
             Panel_not_found
-      | Split (Vertical, _, _, top, bottom) ->
+      | Split { direction = Vertical; first; second } ->
           (
-            match find bottom with
+            match find second with
               | Panel_not_found ->
-                  find top
+                  find first
               | Found_panel ->
-                  Found_result (get_top_left_panel top)
+                  Found_result (get_main_panel first)
               | Found_result _ as x ->
                   x
           )
-      | Split (Horizontal, _, _, left, right) ->
+      | Split { direction = Horizontal; first; second } ->
           (
-            match find right with
+            match find second with
               | Panel_not_found ->
-                  find left
+                  find first
               | Found_panel ->
                   Found_panel
               | Found_result _ as x ->
@@ -245,14 +263,14 @@ let rec replace_panel panel replacement layout =
           Some replacement
         else
           None
-    | Split (dir, pos, line, a, b) ->
-        match replace_panel panel replacement a with
-          | Some new_a ->
-              Some (Split (dir, pos, line, new_a, b))
+    | Split split ->
+        match replace_panel panel replacement split.first with
+          | Some first ->
+              Some (Split { split with first })
           | None ->
-              match replace_panel panel replacement b with
-                | Some new_b ->
-                    Some (Split (dir, pos, line, a, new_b))
+              match replace_panel panel replacement split.second with
+                | Some second ->
+                    Some (Split { split with second })
                 | None ->
                     None
 
@@ -269,18 +287,18 @@ let remove_panel panel layout =
             Panel_found_exactly
           else
             Panel_not_found
-      | Split (dir, pos, line, a, b) ->
-          match find a with
+      | Split split ->
+          match find split.first with
             | Panel_found_exactly ->
-                Panel_found_and_removed (b, get_top_left_panel b)
-            | Panel_found_and_removed (new_a, next_panel) ->
-                Panel_found_and_removed (Split (dir, pos, line, new_a, b), next_panel)
+                Panel_found_and_removed (split.second, get_main_panel split.second)
+            | Panel_found_and_removed (first, next_panel) ->
+                Panel_found_and_removed (Split { split with first }, next_panel)
             | Panel_not_found ->
-                match find b with
+                match find split.second with
                   | Panel_found_exactly ->
-                      Panel_found_and_removed (a, get_top_left_panel a)
-                  | Panel_found_and_removed (new_b, next_panel) ->
-                      Panel_found_and_removed (Split (dir, pos, line, a, new_b), next_panel)
+                      Panel_found_and_removed (split.first, get_main_panel split.first)
+                  | Panel_found_and_removed (second, next_panel) ->
+                      Panel_found_and_removed (Split { split with second }, next_panel)
                   | Panel_not_found ->
                       Panel_not_found
   in

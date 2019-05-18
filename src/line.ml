@@ -9,6 +9,9 @@ let of_list text = Sequence.of_list text
 let of_utf8_string string =
   of_list (Utf8.split_runes string)
 
+let to_buffer buf line =
+  Sequence.iter (Buffer.add_string buf) line
+
 let get = Sequence.get
 
 let length = Sequence.count

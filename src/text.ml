@@ -25,6 +25,20 @@ let output_file filename (text: t) =
     close_out ch;
     Error exn
 
+let to_string (text: t) =
+  (* TODO: compute buffer size? We expect [to_string] to be used for small texts only. *)
+  let buf = Buffer.create 512 in
+  let first = ref true in
+  let add_line line =
+    if !first then
+      first := false
+    else
+      Buffer.add_char buf '\n';
+    Line.to_buffer buf line
+  in
+  Sequence.iter add_line text;
+  Buffer.contents buf
+
 let of_utf8_substrings_offset_0 substrings =
   (* Make a single string so that we can call [Utf8.split_runes]. *)
   let string =

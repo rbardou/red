@@ -13,12 +13,24 @@ let commands = ref String_map.empty
 let define name (f: State.t -> unit) =
   commands := String_map.add name f !commands
 
-let bind (state: State.t) key name =
-  match String_map.find name !commands with
-    | exception Not_found ->
-        Log.errorf "unbound command: %s" name
-    | command ->
-        state.bindings <- Key.Map.add key command state.bindings
+type context =
+  | Global
+  | File
+  | Prompt
+
+let bind context (state: State.t) key name =
+  let command =
+    match String_map.find name !commands with
+      | exception Not_found ->
+          Log.errorf "unbound command: %s" name;
+          (fun _ -> ())
+      | command ->
+          command
+  in
+  match context with
+    | Global -> state.global_bindings <- Key.Map.add key command state.global_bindings
+    | File -> state.file_bindings <- Key.Map.add key command state.file_bindings
+    | Prompt -> state.prompt_bindings <- Key.Map.add key command state.prompt_bindings
 
 (******************************************************************************)
 (*                                   Helpers                                  *)
@@ -134,6 +146,25 @@ let select_all view =
   cursor.position.y <- max_y;
   cursor.position.x <- Text.get_line_length max_y text
 
+let remove_panel panel (state: State.t) =
+  match Layout.remove_panel panel state.layout with
+    | None ->
+        Log.error "cannot remove last panel"
+    | Some (new_layout, next_panel) ->
+        (* TODO: also remove prompt panels (recursively) *)
+        State.set_layout state new_layout;
+        state.focus <- next_panel
+
+let save (file: File.t) filename =
+  (* TODO: choose a temporary filename, and move the file after that *)
+  file.filename <- Some filename;
+  match Text.output_file filename file.text with
+    | Ok () ->
+        file.modified <- false;
+        Log.infof "Wrote: %s" filename
+    | Error exn ->
+        Log.error (Printexc.to_string exn)
+
 (******************************************************************************)
 (*                                 Definitions                                *)
 (******************************************************************************)
@@ -143,24 +174,18 @@ let () = define "quit" @@ fun state -> raise State.Exit
 
 let () = define "save" @@ fun state ->
   let file = state.focus.view.file in
-  (* TODO: choose a temporary filename, and move the file after that *)
   match file.filename with
     | None ->
         Log.info "TODO: prompt for file name"
     | Some filename ->
-        match Text.output_file filename file.text with
-          | Ok () ->
-              file.modified <- false;
-              Log.infof "Wrote: %s" filename
-          | Error exn ->
-              Log.error (Printexc.to_string exn)
+        save file filename
 
-(* TODO: this is work in progress... *)
 let () = define "save_as" @@ fun state ->
+  let file_to_save = state.focus.view.file in
   let prompt_panel =
     let file =
       let filename_text =
-        match state.focus.view.file.filename with
+        match file_to_save.filename with
           | None ->
               Text.empty
           | Some filename ->
@@ -170,11 +195,13 @@ let () = define "save_as" @@ fun state ->
     in
     let view = File.create_view file in
     select_all view;
-    Panel.create view
+    let validate filename = save file_to_save (Text.to_string filename) in
+    Panel.create (Prompt { prompt = "Save as: "; validate }) view
   in
   let new_layout =
     let new_sublayout =
-      Layout.vertical_split ~pos: (Absolute_second 2) (Layout.single state.focus) (Layout.single prompt_panel)
+      Layout.split Vertical ~pos: (Absolute_second 1) ~main: Second
+        (Layout.single state.focus) (Layout.single prompt_panel)
     in
     match Layout.replace_panel state.focus new_sublayout state.layout with
       | None ->
@@ -187,13 +214,7 @@ let () = define "save_as" @@ fun state ->
   state.focus <- prompt_panel
 
 let () = define "remove_panel" @@ fun state ->
-  match Layout.remove_panel state.focus state.layout with
-    | None ->
-        Log.error "cannot remove last panel"
-    | Some (new_layout, next_panel) ->
-        (* TODO: also remove prompt panels? *)
-        State.set_layout state new_layout;
-        state.focus <- next_panel
+  remove_panel state.focus state
 
 let () = define "move_right" @@ move true false move_right
 let () = define "move_left" @@ move true false move_left
@@ -286,3 +307,12 @@ let () = define "create_cursors_from_selection" @@ fun state ->
 let () = define "copy" @@ fun state -> File.copy state.clipboard state.focus.view
 let () = define "cut" @@ fun state -> File.cut state.clipboard state.focus.view
 let () = define "paste" @@ fun state -> File.paste state.clipboard state.focus.view
+
+let () = define "validate" @@ fun state ->
+  let panel = state.focus in
+  match panel.kind with
+    | Prompt { validate } ->
+        remove_panel panel state;
+        validate panel.view.file.text
+    | _ ->
+        Log.error "focused panel is not a prompt"
