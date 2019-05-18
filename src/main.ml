@@ -29,6 +29,7 @@ let main () =
   let (=>) = Command.bind state in
 
   Ctrl_q => "quit";
+  Ctrl_s => "save";
 
   Right => "move_right";
   Left => "move_left";

@@ -32,3 +32,6 @@ val split_right: int -> t -> t
 
 (** Concatenate two lines. *)
 val concat: t -> t -> t
+
+(** Output a line to a channel, newline character not included. *)
+val output_channel: out_channel -> t -> unit

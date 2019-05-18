@@ -19,3 +19,7 @@ let split_left = Sequence.split_left
 let split_right = Sequence.split_right
 
 let concat = Sequence.concat
+
+let output_channel ch line =
+  let output_character character = output_string ch character in
+  Sequence.iter output_character line

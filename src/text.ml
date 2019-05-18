@@ -2,6 +2,27 @@ type t = Line.t Sequence.t
 
 let empty = Sequence.one Line.empty
 
+let output_channel ch (text: t) =
+  let first = ref true in
+  let output_line line =
+    if !first then
+      first := false
+    else
+      output_char ch '\n';
+    Line.output_channel ch line
+  in
+  Sequence.iter output_line text
+
+let output_file filename (text: t) =
+  let ch = open_out filename in
+  try
+    output_channel ch text;
+    close_out ch;
+    Ok ()
+  with exn ->
+    close_out ch;
+    Error exn
+
 let of_utf8_substrings_offset_0 substrings =
   (* Make a single string so that we can call [Utf8.split_runes]. *)
   let string =

@@ -6,6 +6,9 @@ type t
 (** A text with only one empty line. *)
 val empty: t
 
+(** Output to file. *)
+val output_file: string -> t -> (unit, exn) result
+
 (** Make a text from a list of substrings.
 
     Each substring is of the form: [(string, len)]

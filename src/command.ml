@@ -131,6 +131,20 @@ let move_after_scroll (view: File.view) old_scroll =
 
 let () = define "quit" @@ fun state -> raise State.Exit
 
+let () = define "save" @@ fun state ->
+  let file = state.focus.view.file in
+  (* TODO: choose a temporary filename, and move the file after that *)
+  match file.filename with
+    | None ->
+        Log.info "TODO: prompt for file name"
+    | Some filename ->
+        match Text.output_file filename file.text with
+          | Ok () ->
+              file.modified <- false;
+              Log.infof "Wrote: %s" filename
+          | Error exn ->
+              Log.error (Printexc.to_string exn)
+
 let () = define "move_right" @@ move true false move_right
 let () = define "move_left" @@ move true false move_left
 let () = define "move_down" @@ move true true move_down
