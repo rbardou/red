@@ -9,7 +9,7 @@ let create ?focus layout =
   let focus =
     match focus with
       | None ->
-          Layout.get_first_panel layout
+          Layout.get_top_left_panel layout
       | Some focus ->
           focus
   in
@@ -41,3 +41,6 @@ let render state frame =
     (Render.width frame)
     (Render.height frame)
     state.layout
+
+let set_layout state layout =
+  state.layout <- layout

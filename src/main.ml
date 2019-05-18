@@ -30,6 +30,8 @@ let main () =
 
   Ctrl_q => "quit";
   Ctrl_s => "save";
+  Alt_ctrl_s => "save_as";
+  F4 => "remove_panel"; (* TODO: better binding? *)
 
   Right => "move_right";
   Left => "move_left";
@@ -40,6 +42,7 @@ let main () =
   Ctrl_end => "move_end_of_file";
   Ctrl_home => "move_beginning_of_file";
 
+  Ctrl_a => "select_all";
   Shift_right => "select_right";
   Shift_left => "select_left";
   Shift_down => "select_down";

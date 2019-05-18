@@ -4,7 +4,10 @@ let empty = Sequence.empty
 
 let one = Sequence.one
 
-let of_list list = Sequence.of_list list
+let of_list text = Sequence.of_list text
+
+let of_utf8_string string =
+  of_list (Utf8.split_runes string)
 
 let get = Sequence.get
 

@@ -3,9 +3,9 @@ type split_direction =
   | Horizontal (* left and right *)
 
 type split_position =
-  | Absolute_first of int (* set the size of the top or left sublayout, and the other one takes the rest *)
-  | Absolute_second of int (* set the size of the bottom or right sublayout, and the other one takes the rest *)
-  | Ratio of int * int (* numerator, denominator: denotes a fraction of the parent's size *)
+  | Absolute_first of int
+  | Absolute_second of int
+  | Ratio of int * int
 
 type t =
   | Single of Panel.t
@@ -14,8 +14,8 @@ type t =
 let single panel =
   Single panel
 
-let vertical_split ?(pos = Ratio (1, 2)) ?(line = false) left right =
-  Split (Vertical, pos, line, left, right)
+let vertical_split ?(pos = Ratio (1, 2)) ?(line = false) top bottom =
+  Split (Vertical, pos, line, top, bottom)
 
 let horizontal_split ?(pos = Ratio (1, 2)) ?(line = false) left right =
   Split (Horizontal, pos, line, left, right)
@@ -98,12 +98,12 @@ let rec render render_panel frame ?(x = 0) ?(y = 0) ~w ~h layout: unit =
         let size = size + 1 in
         render render_panel frame ~x: (x + size) ~y ~w: (w - size) ~h right
 
-let rec get_first_panel layout =
+let rec get_top_left_panel layout =
   match layout with
     | Single panel ->
         panel
     | Split (_, _, _, sublayout, _) ->
-        get_first_panel sublayout
+        get_top_left_panel sublayout
 
 type get_panel_result =
   | Panel_not_found
@@ -138,7 +138,7 @@ let get_panel_right panel layout =
               | Panel_not_found ->
                   find right
               | Found_panel ->
-                  Found_result (get_first_panel right)
+                  Found_result (get_top_left_panel right)
               | Found_result _ as x ->
                   x
           )
@@ -169,7 +169,7 @@ let get_panel_left panel layout =
               | Panel_not_found ->
                   find left
               | Found_panel ->
-                  Found_result (get_first_panel left)
+                  Found_result (get_top_left_panel left)
               | Found_result _ as x ->
                   x
           )
@@ -190,7 +190,7 @@ let get_panel_down panel layout =
               | Panel_not_found ->
                   find bottom
               | Found_panel ->
-                  Found_result (get_first_panel bottom)
+                  Found_result (get_top_left_panel bottom)
               | Found_result _ as x ->
                   x
           )
@@ -221,7 +221,7 @@ let get_panel_up panel layout =
               | Panel_not_found ->
                   find top
               | Found_panel ->
-                  Found_result (get_first_panel top)
+                  Found_result (get_top_left_panel top)
               | Found_result _ as x ->
                   x
           )
@@ -237,3 +237,55 @@ let get_panel_up panel layout =
           )
   in
   option_of_get_panel_result (find layout)
+
+let rec replace_panel panel replacement layout =
+  match layout with
+    | Single single_panel ->
+        if single_panel == panel then
+          Some replacement
+        else
+          None
+    | Split (dir, pos, line, a, b) ->
+        match replace_panel panel replacement a with
+          | Some new_a ->
+              Some (Split (dir, pos, line, new_a, b))
+          | None ->
+              match replace_panel panel replacement b with
+                | Some new_b ->
+                    Some (Split (dir, pos, line, a, new_b))
+                | None ->
+                    None
+
+type remove_panel_result =
+  | Panel_not_found
+  | Panel_found_exactly
+  | Panel_found_and_removed of t * Panel.t
+
+let remove_panel panel layout =
+  let rec find layout =
+    match layout with
+      | Single single_panel ->
+          if single_panel == panel then
+            Panel_found_exactly
+          else
+            Panel_not_found
+      | Split (dir, pos, line, a, b) ->
+          match find a with
+            | Panel_found_exactly ->
+                Panel_found_and_removed (b, get_top_left_panel b)
+            | Panel_found_and_removed (new_a, next_panel) ->
+                Panel_found_and_removed (Split (dir, pos, line, new_a, b), next_panel)
+            | Panel_not_found ->
+                match find b with
+                  | Panel_found_exactly ->
+                      Panel_found_and_removed (a, get_top_left_panel a)
+                  | Panel_found_and_removed (new_b, next_panel) ->
+                      Panel_found_and_removed (Split (dir, pos, line, a, new_b), next_panel)
+                  | Panel_not_found ->
+                      Panel_not_found
+  in
+  match find layout with
+    | Panel_not_found | Panel_found_exactly ->
+        None
+    | Panel_found_and_removed (new_layout, next_panel) ->
+        Some (new_layout, next_panel)

@@ -125,9 +125,14 @@ let move_after_scroll (view: File.view) old_scroll =
   cursor.selection_start.x <- cursor.position.x;
   cursor.selection_start.y <- cursor.position.y
 
-let copy text cursor =
-  let left, right = File.selection_boundaries cursor in
-  cursor.clipboard <- Text.sub ~x1: left.x ~y1: left.y ~x2: right.x ~y2: right.y text
+let select_all view =
+  File.foreach_cursor view @@ fun cursor ->
+  cursor.selection_start.x <- 0;
+  cursor.selection_start.y <- 0;
+  let text = view.file.text in
+  let max_y = Text.get_line_count text - 1 in
+  cursor.position.y <- max_y;
+  cursor.position.x <- Text.get_line_length max_y text
 
 (******************************************************************************)
 (*                                 Definitions                                *)
@@ -150,6 +155,46 @@ let () = define "save" @@ fun state ->
           | Error exn ->
               Log.error (Printexc.to_string exn)
 
+(* TODO: this is work in progress... *)
+let () = define "save_as" @@ fun state ->
+  let prompt_panel =
+    let file =
+      let filename_text =
+        match state.focus.view.file.filename with
+          | None ->
+              Text.empty
+          | Some filename ->
+              Text.one_line (Line.of_utf8_string filename)
+      in
+      File.create filename_text
+    in
+    let view = File.create_view file in
+    select_all view;
+    Panel.create view
+  in
+  let new_layout =
+    let new_sublayout =
+      Layout.vertical_split ~pos: (Absolute_second 2) (Layout.single state.focus) (Layout.single prompt_panel)
+    in
+    match Layout.replace_panel state.focus new_sublayout state.layout with
+      | None ->
+          Log.error "focused panel is not in current layout";
+          state.layout
+      | Some new_layout ->
+          new_layout
+  in
+  State.set_layout state new_layout;
+  state.focus <- prompt_panel
+
+let () = define "remove_panel" @@ fun state ->
+  match Layout.remove_panel state.focus state.layout with
+    | None ->
+        Log.error "cannot remove last panel"
+    | Some (new_layout, next_panel) ->
+        (* TODO: also remove prompt panels? *)
+        State.set_layout state new_layout;
+        state.focus <- next_panel
+
 let () = define "move_right" @@ move true false move_right
 let () = define "move_left" @@ move true false move_left
 let () = define "move_down" @@ move true true move_down
@@ -167,6 +212,9 @@ let () = define "select_end_of_line" @@ move false false move_end_of_line
 let () = define "select_beginning_of_line" @@ move false false move_beginning_of_line
 let () = define "select_end_of_file" @@ move false false move_end_of_file
 let () = define "select_beginning_of_file" @@ move false false move_beginning_of_file
+
+let () = define "select_all" @@ fun state ->
+  select_all state.focus.view
 
 let () = define "focus_right" @@ focus_relative Layout.get_panel_right
 let () = define "focus_left" @@ focus_relative Layout.get_panel_left

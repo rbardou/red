@@ -2,6 +2,8 @@ type t = Line.t Sequence.t
 
 let empty = Sequence.one Line.empty
 
+let one_line = Sequence.one
+
 let output_channel ch (text: t) =
   let first = ref true in
   let output_line line =
