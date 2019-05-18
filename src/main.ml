@@ -53,6 +53,9 @@ let main () =
   Alt_down => "focus_down";
   Alt_up => "focus_up";
 
+  Page_down => "scroll_down";
+  Page_up => "scroll_up";
+
   Return => "insert_new_line";
   Delete => "delete_character";
   Backspace => "delete_character_backwards";

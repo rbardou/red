@@ -30,16 +30,20 @@ let recenter_y (view: File.view) (cursor: File.cursor) =
 let recenter_x (view: File.view) (cursor: File.cursor) =
   view.scroll_x <- max 0 (cursor.position.x - view.width / 2)
 
-let recenter_if_needed (state: State.t) =
-  let view = state.focus.view in
+let if_only_one_cursor (view: File.view) f =
   match view.cursors with
     | [ cursor ] ->
-        if cursor.position.x < view.scroll_x || cursor.position.x >= view.scroll_x + view.width - 1 then
-          recenter_x view cursor;
-        if cursor.position.y < view.scroll_y || cursor.position.y >= view.scroll_y + view.height - 1 then
-          recenter_y view cursor
+        f cursor
     | _ ->
         ()
+
+let recenter_if_needed (state: State.t) =
+  let view = state.focus.view in
+  if_only_one_cursor view @@ fun cursor ->
+  if cursor.position.x < view.scroll_x || cursor.position.x >= view.scroll_x + view.width - 1 then
+    recenter_x view cursor;
+  if cursor.position.y < view.scroll_y || cursor.position.y >= view.scroll_y + view.height - 1 then
+    recenter_y view cursor
 
 (* Change cursor position (apply [f] to get new coordinates).
    Update [preferred_x] unless [vertical].
@@ -111,6 +115,16 @@ let focus_relative get (state: State.t) =
     | Some panel ->
         state.focus <- panel
 
+let move_after_scroll (view: File.view) old_scroll =
+  let delta = view.scroll_y - old_scroll in
+  let text = view.file.text in
+  let max_y = Text.get_line_count text - 1 in
+  if_only_one_cursor view @@ fun cursor ->
+  cursor.position.y <- max 0 (min max_y (cursor.position.y + delta));
+  cursor.position.x <- min (Text.get_line_length cursor.position.y text) cursor.preferred_x;
+  cursor.selection_start.x <- cursor.position.x;
+  cursor.selection_start.y <- cursor.position.y
+
 (******************************************************************************)
 (*                                 Definitions                                *)
 (******************************************************************************)
@@ -139,6 +153,32 @@ let () = define "focus_right" @@ focus_relative Layout.get_panel_right
 let () = define "focus_left" @@ focus_relative Layout.get_panel_left
 let () = define "focus_down" @@ focus_relative Layout.get_panel_down
 let () = define "focus_up" @@ focus_relative Layout.get_panel_up
+
+let () = define "scroll_down" @@ fun state ->
+  let view = state.focus.view in
+  let text = view.file.text in
+
+  (* Scroll. *)
+  let max_y = Text.get_line_count text - 1 in
+  let max_scroll =
+    (* Last line is often empty, so we want to see at least the line before that, unless panel height is 1. *)
+    if view.height <= 1 then max_y else max_y - 1
+  in
+  let old_scroll = view.scroll_y in
+  view.scroll_y <- min max_scroll (view.scroll_y + view.height / 2);
+
+  (* Move cursor. *)
+  move_after_scroll view old_scroll
+
+let () = define "scroll_up" @@ fun state ->
+  let view = state.focus.view in
+
+  (* Scroll. *)
+  let old_scroll = view.scroll_y in
+  view.scroll_y <- max 0 (view.scroll_y - view.height / 2);
+
+  (* Move cursor. *)
+  move_after_scroll view old_scroll
 
 let () = define "insert_new_line" @@ fun state ->
   File.replace_selection_by_new_line state.focus.view;
