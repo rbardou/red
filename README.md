@@ -6,7 +6,7 @@ A command-line text editor in OCaml.
 
 This is a hobby project and it just started, so don't expect much.
 
-Basic stuff that you would expect from any editor:
+Basic features that you would expect from any editor:
 - arrow keys, Home and End (movement);
 - Shift + movement key (selection);
 - Return (insert new line / replace selection with new line);
@@ -17,13 +17,10 @@ Basic stuff that you would expect from any editor:
 - Ctrl+S to save (warning: no backup is created and there is no confirmation
   prompt yet).
 
-Exotic stuff:
-- Alt + arrow key to scroll by one unit (note: I use `xset r rate 250 60`
-  to fasten my keyboard's repetition delay and rate, without it this is less
-  useful);
+Advanced features:
 - Alt + `"` to toggle multiple cursor mode (select several lines first to
   create one cursor per line);
-- F5 to scroll to cursor (try pressing it several times).
+- Alt + arrow keys: select another panel.
 
 ## Install OCaml
 
@@ -37,7 +34,7 @@ Alternatively, you can use OPAM (OCaml Package Manager, https://opam.ocaml.org):
 
     sudo apt-get install opam
     opam init
-    opam switch 4.02.3
+    opam switch 4.03.0
 
 ## Compile
 
