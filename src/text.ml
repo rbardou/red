@@ -136,3 +136,60 @@ let delete_region ~x ~y ~characters ~lines (text: t) =
         remove_lines (count - 1) text
     in
     remove_lines (lines - 1) text
+
+let get_line y (text: t) =
+  match Sequence.get y text with
+    | None ->
+        Line.empty
+    | Some line ->
+        line
+
+let sub ~x1 ~y1 ~x2 ~y2 (text: t) =
+  if y1 > y2 then
+    empty
+  else if y1 = y2 then
+    Sequence.one (Line.sub x1 x2 (get_line y1 text))
+  else
+    let first =
+      let line = get_line y1 text in
+      Line.sub x1 (Line.length line - 1) line
+    in
+    let middle =
+      Sequence.sub (y1 + 1) (y2 - 1) text
+    in
+    let last =
+      let line = get_line y2 text in
+      Line.sub 0 x2 line
+    in
+    middle
+    |> Sequence.prepend first
+    |> Sequence.append last
+
+let insert_text ~x ~y ~sub (text: t): t =
+  let line = get_line y text in
+  let left, right = Line.split x line in
+
+  (* Prepend [left] to the first line of [sub]. *)
+  let sub =
+    match Sequence.get 0 sub with
+      | None ->
+          Sequence.one left
+      | Some first_line ->
+          Sequence.set 0 (Line.concat left first_line) sub
+  in
+
+  (* Append [right] to the last line of [sub]. *)
+  let sub =
+    let last_index = Sequence.count sub - 1 in
+    match Sequence.get last_index sub with
+      | None ->
+          assert false (* Impossible, we added a line above. *)
+      | Some last_line ->
+          Sequence.set last_index (Line.concat last_line right) sub
+  in
+
+  (* Remove line at [y]. *)
+  let text = Sequence.remove y text in
+
+  (* Replace it by inserting the lines of [sub]. *)
+  Sequence.insert_sub y sub text

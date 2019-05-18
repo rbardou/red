@@ -9,6 +9,7 @@ type cursor =
     selection_start: mark;
     position: mark;
     mutable preferred_x: int;
+    mutable clipboard: Text.t;
   }
 
 (* Test whether a mark is before another mark. *)
@@ -58,6 +59,7 @@ let create_cursor x y =
     selection_start = { x; y };
     position = { x; y };
     preferred_x = x;
+    clipboard = Text.empty;
   }
 
 let create_view file =
@@ -375,3 +377,34 @@ let delete_selection_or_character_backwards view =
     delete_character_backwards view cursor
   else
     delete_selection view cursor
+
+let copy_cursor text cursor =
+  let left, right = selection_boundaries cursor in
+  (* The cursor itself is not included in the selection, hence the value of x2.
+     A negative value here is not an issue for Text.sub. *)
+  cursor.clipboard <- Text.sub ~x1: left.x ~y1: left.y ~x2: (right.x - 1) ~y2: right.y text
+
+let copy view =
+  foreach_cursor view (copy_cursor view.file.text)
+
+let cut view =
+  edit view @@ fun view ->
+  foreach_cursor view @@ fun cursor ->
+  copy_cursor view.file.text cursor;
+  delete_selection view cursor
+
+let paste view =
+  edit view @@ fun view ->
+  foreach_cursor view @@ fun cursor ->
+
+  (* Replace selection with clipboard. *)
+  delete_selection view cursor;
+  let x = cursor.position.x in
+  let y = cursor.position.y in
+  let sub = cursor.clipboard in
+  set_text view.file (Text.insert_text ~x ~y ~sub view.file.text);
+
+  (* Update marks. *)
+  let lines = Text.get_line_count sub - 1 in
+  let characters = Text.get_line_length lines sub in
+  update_all_marks_after_insert ~x ~y ~characters ~lines view.file.views

@@ -48,3 +48,11 @@ val insert_new_line: int -> int -> t -> t
     Start at [x, y].
     Remove until [lines] newline characters, then [characters] more characters. *)
 val delete_region: x: int -> y: int -> characters: int -> lines: int -> t -> t
+
+(** Get a subpart of a text.
+
+    [(x2, y2)] should be after [(x1, y1)]. *)
+val sub: x1: int -> y1: int -> x2: int -> y2: int -> t -> t
+
+(** Insert a text inside a text. *)
+val insert_text: x: int -> y: int -> sub: t -> t -> t

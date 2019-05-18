@@ -125,10 +125,15 @@ let move_after_scroll (view: File.view) old_scroll =
   cursor.selection_start.x <- cursor.position.x;
   cursor.selection_start.y <- cursor.position.y
 
+let copy text cursor =
+  let left, right = File.selection_boundaries cursor in
+  cursor.clipboard <- Text.sub ~x1: left.x ~y1: left.y ~x2: right.x ~y2: right.y text
+
 (******************************************************************************)
 (*                                 Definitions                                *)
 (******************************************************************************)
 
+(* TODO: if there are modified files, prompt for confirmation. *)
 let () = define "quit" @@ fun state -> raise State.Exit
 
 let () = define "save" @@ fun state ->
@@ -229,3 +234,7 @@ let () = define "create_cursors_from_selection" @@ fun state ->
 
   (* Replace cursors with new cursors. *)
   File.set_cursors view (List.map (File.create_cursor 0) lines)
+
+let () = define "copy" @@ fun state -> File.copy state.focus.view
+let () = define "cut" @@ fun state -> File.cut state.focus.view
+let () = define "paste" @@ fun state -> File.paste state.focus.view

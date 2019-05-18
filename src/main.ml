@@ -62,6 +62,10 @@ let main () =
   Backspace => "delete_character_backwards";
   Alt_double_quote => "create_cursors_from_selection";
 
+  Ctrl_c => "copy";
+  Ctrl_x => "cut";
+  Ctrl_v => "paste";
+
   Term_run.run_raw_mode
     ~on_key_press: (State.on_key_press state)
     ~on_render: (State.render state)

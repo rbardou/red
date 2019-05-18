@@ -23,3 +23,5 @@ let concat = Sequence.concat
 let output_channel ch line =
   let output_character character = output_string ch character in
   Sequence.iter output_character line
+
+let sub = Sequence.sub
