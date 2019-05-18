@@ -283,6 +283,6 @@ let () = define "create_cursors_from_selection" @@ fun state ->
   (* Replace cursors with new cursors. *)
   File.set_cursors view (List.map (File.create_cursor 0) lines)
 
-let () = define "copy" @@ fun state -> File.copy state.focus.view
-let () = define "cut" @@ fun state -> File.cut state.focus.view
-let () = define "paste" @@ fun state -> File.paste state.focus.view
+let () = define "copy" @@ fun state -> File.copy state.clipboard state.focus.view
+let () = define "cut" @@ fun state -> File.cut state.clipboard state.focus.view
+let () = define "paste" @@ fun state -> File.paste state.clipboard state.focus.view

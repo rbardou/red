@@ -9,7 +9,7 @@ type cursor =
     selection_start: mark;
     position: mark;
     mutable preferred_x: int;
-    mutable clipboard: Text.t;
+    clipboard: Clipboard.t;
   }
 
 (* Test whether a mark is before another mark. *)
@@ -59,7 +59,7 @@ let create_cursor x y =
     selection_start = { x; y };
     position = { x; y };
     preferred_x = x;
-    clipboard = Text.empty;
+    clipboard = { text = Text.empty };
   }
 
 let create_view file =
@@ -137,6 +137,15 @@ let foreach_view file f =
 
 let foreach_cursor view f =
   List.iter f view.cursors
+
+(* Iterate on cursors and their clipboards.
+   If there is only one cursor, use global clipboard instead of cursor clipboard. *)
+let foreach_cursor_clipboard (global_clipboard: Clipboard.t) view f =
+  match view.cursors with
+    | [ cursor ] ->
+        f global_clipboard cursor
+    | cursors ->
+        List.iter (fun cursor -> f cursor.clipboard cursor) cursors
 
 (* Move marks after text has been inserted.
 
@@ -378,30 +387,31 @@ let delete_selection_or_character_backwards view =
   else
     delete_selection view cursor
 
-let copy_cursor text cursor =
+let get_selected_text text cursor =
   let left, right = selection_boundaries cursor in
   (* The cursor itself is not included in the selection, hence the value of x2.
      A negative value here is not an issue for Text.sub. *)
-  cursor.clipboard <- Text.sub ~x1: left.x ~y1: left.y ~x2: (right.x - 1) ~y2: right.y text
+  Text.sub ~x1: left.x ~y1: left.y ~x2: (right.x - 1) ~y2: right.y text
 
-let copy view =
-  foreach_cursor view (copy_cursor view.file.text)
+let copy (global_clipboard: Clipboard.t) view =
+  foreach_cursor_clipboard global_clipboard view @@ fun clipboard cursor ->
+  clipboard.text <- get_selected_text view.file.text cursor
 
-let cut view =
+let cut (global_clipboard: Clipboard.t) view =
   edit view @@ fun view ->
-  foreach_cursor view @@ fun cursor ->
-  copy_cursor view.file.text cursor;
+  foreach_cursor_clipboard global_clipboard view @@ fun clipboard cursor ->
+  clipboard.text <- get_selected_text view.file.text cursor;
   delete_selection view cursor
 
-let paste view =
+let paste (global_clipboard: Clipboard.t) view =
   edit view @@ fun view ->
-  foreach_cursor view @@ fun cursor ->
+  foreach_cursor_clipboard global_clipboard view @@ fun clipboard cursor ->
 
   (* Replace selection with clipboard. *)
   delete_selection view cursor;
   let x = cursor.position.x in
   let y = cursor.position.y in
-  let sub = cursor.clipboard in
+  let sub = clipboard.text in
   set_text view.file (Text.insert_text ~x ~y ~sub view.file.text);
 
   (* Update marks. *)

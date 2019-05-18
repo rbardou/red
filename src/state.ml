@@ -3,6 +3,7 @@ type t =
     mutable layout: Layout.t;
     mutable focus: Panel.t;
     mutable bindings: (t -> unit) Key.Map.t;
+    clipboard: Clipboard.t;
   }
 
 let create ?focus layout =
@@ -17,6 +18,7 @@ let create ?focus layout =
     layout;
     focus;
     bindings = Key.Map.empty;
+    clipboard = { text = Text.empty };
   }
 
 exception Exit
