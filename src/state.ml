@@ -36,6 +36,12 @@ let create ?focus layout =
 exception Exit
 exception Abort
 
+let abort ?exn reason =
+  Log.error ?exn "%s" reason;
+  raise Abort
+
+let abort ?exn x = Printf.ksprintf (abort ?exn) x
+
 let on_key_press state (key: Key.t) =
   let local_bindings =
     match state.focus.kind with
@@ -87,3 +93,21 @@ let create_file_loading state filename =
   let file = create_file state Text.empty in
   File.load file filename;
   file
+
+let remove_panel panel state =
+  match Layout.remove_panel panel state.layout with
+    | None ->
+        abort "cannot remove last panel"
+    | Some (new_layout, next_panel) ->
+        set_layout state new_layout;
+        state.focus <- next_panel
+
+let set_focus state focus =
+  (
+    match state.focus.kind with
+      | Prompt _ ->
+          remove_panel state.focus state
+      | File ->
+          ()
+  );
+  state.focus <- focus

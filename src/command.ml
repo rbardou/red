@@ -28,11 +28,7 @@ let bind context (state: State.t) key name =
 (*                                   Helpers                                  *)
 (******************************************************************************)
 
-let abort ?exn reason =
-  Log.error ?exn "%s" reason;
-  raise State.Abort
-
-let abort ?exn x = Printf.ksprintf (abort ?exn) x
+let abort ?exn x = State.abort ?exn x
 
 let recenter_y (view: File.view) (cursor: File.cursor) =
   view.scroll_y <- max 0 (cursor.position.y - view.height / 2)
@@ -123,7 +119,7 @@ let focus_relative get (state: State.t) =
     | None ->
         ()
     | Some panel ->
-        state.focus <- panel
+        State.set_focus state panel
 
 let move_after_scroll (view: File.view) old_scroll =
   let delta = view.scroll_y - old_scroll in
@@ -143,15 +139,6 @@ let select_all view =
   let max_y = Text.get_line_count text - 1 in
   cursor.position.y <- max_y;
   cursor.position.x <- Text.get_line_length max_y text
-
-let remove_panel panel (state: State.t) =
-  match Layout.remove_panel panel state.layout with
-    | None ->
-        abort "cannot remove last panel"
-    | Some (new_layout, next_panel) ->
-        (* TODO: also remove prompt panels (recursively) *)
-        State.set_layout state new_layout;
-        state.focus <- next_panel
 
 let save (file: File.t) filename =
   if filename <> "" then (
@@ -186,7 +173,7 @@ let prompt ?(global = false) ?(default = "") (prompt: string) (state: State.t) (
     let view = File.create_view file in
     select_all view;
     let validate text =
-      if global && Layout.panel_is_visible initial_focus state.layout then state.focus <- initial_focus;
+      if global && Layout.panel_is_visible initial_focus state.layout then State.set_focus state initial_focus;
       validate (Text.to_string text)
     in
     Panel.create (Prompt { prompt; validate }) view
@@ -211,7 +198,7 @@ let prompt ?(global = false) ?(default = "") (prompt: string) (state: State.t) (
             new_layout
   in
   State.set_layout state new_layout;
-  state.focus <- prompt_panel
+  State.set_focus state prompt_panel
 
 let rec prompt_confirmation ?global ?(repeated = false) message state confirm =
   let message = if repeated then "Please answer yes or no. " ^ message else message in
@@ -270,8 +257,7 @@ let () = define "new" @@ fun state ->
   let view = File.create_view file in
   panel.view <- view
 
-let () = define "remove_panel" @@ fun state ->
-  remove_panel state.focus state
+let () = define "remove_panel" @@ fun state -> State.remove_panel state.focus state
 
 let () = define "move_right" @@ move true false move_right
 let () = define "move_left" @@ move true false move_left
@@ -380,7 +366,7 @@ let () = define "validate" @@ fun state ->
   let panel = state.focus in
   match panel.kind with
     | Prompt { validate } ->
-        remove_panel panel state;
+        State.remove_panel panel state;
         validate panel.view.file.text
     | _ ->
         abort "focused panel is not a prompt"
