@@ -55,7 +55,8 @@ let recenter_if_needed (state: State.t) =
    Update [preferred_x] unless [vertical].
    Reset selection if [reset_selection]. *)
 let move reset_selection vertical f (state: State.t) =
-  let text = state.focus.view.file.text in
+  let view = state.focus.view in
+  let text = view.file.text in
   let move (cursor: File.cursor) =
     let position = cursor.position in
     let x, y = f text (if vertical then cursor.preferred_x else position.x) position.y in
@@ -68,7 +69,8 @@ let move reset_selection vertical f (state: State.t) =
     position.y <- y;
     cursor.preferred_x <- if vertical then cursor.preferred_x else x;
   in
-  File.foreach_cursor state.focus.view move;
+  view.auto_scroll_to_bottom <- false;
+  File.foreach_cursor view move;
   recenter_if_needed state
 
 let move_right text x y =
@@ -126,6 +128,7 @@ let move_after_scroll (view: File.view) old_scroll =
   let text = view.file.text in
   let max_y = Text.get_line_count text - 1 in
   if_only_one_cursor view @@ fun cursor ->
+  view.auto_scroll_to_bottom <- false;
   cursor.position.y <- max 0 (min max_y (cursor.position.y + delta));
   cursor.position.x <- min (Text.get_line_length cursor.position.y text) cursor.preferred_x;
   cursor.selection_start.x <- cursor.position.x;
@@ -391,4 +394,9 @@ let () = define "execute_process" @@ fun state ->
     | program :: arguments ->
         let file = State.create_file state ("<" ^ command ^ ">") Text.empty in
         panel.view <- File.create_view file;
-        File.create_process file program arguments
+        File.create_process file program arguments;
+        panel.view.auto_scroll_to_bottom <- true
+
+(* TODO: bind? or do it automatically when cursor is on the last line of a process file? *)
+let () = define "toggle_auto_scroll_to_bottom" @@ fun state ->
+  state.focus.view.auto_scroll_to_bottom <- not state.focus.view.auto_scroll_to_bottom

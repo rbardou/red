@@ -66,6 +66,7 @@ and view =
     mutable height: int; (* set when rendering *)
     mutable marks: mark list;
     mutable cursors: cursor list;
+    mutable auto_scroll_to_bottom: bool;
   }
 
 and undo =
@@ -168,6 +169,7 @@ let create_view file =
       height = 40;
       marks = [ cursor.selection_start; cursor.position ];
       cursors = [ cursor ];
+      auto_scroll_to_bottom = false;
     }
   in
   file.views <- view :: file.views;
@@ -219,7 +221,8 @@ let reset file =
   view.scroll_y <- 0;
   let cursor = create_cursor 0 0 in
   view.marks <- [ cursor.selection_start; cursor.position ];
-  view.cursors <- [ cursor ]
+  view.cursors <- [ cursor ];
+  view.auto_scroll_to_bottom <- false
 
 let create_spawn_group file =
   kill_spawn_group file;

@@ -35,8 +35,21 @@ let render_view
   view.width <- w;
   view.height <- h;
   let file = view.file in
+  let text = file.text in
   let scroll_x = view.scroll_x in
-  let scroll_y = view.scroll_y in
+  let scroll_y =
+    if view.auto_scroll_to_bottom then
+      let last_line = Text.get_line_count text in
+      let last_line =
+        if Text.get_line_length last_line text = 0 then
+          max 0 (last_line - 1)
+        else
+          last_line
+      in
+      last_line - h
+    else
+      view.scroll_y
+  in
   let cursors = view.cursors in
 
   (* Return true whether a given position is the position of a cursor. *)
@@ -45,7 +58,6 @@ let render_view
   in
 
   (* Text area. *)
-  let text = file.text in
   for text_y = scroll_y to scroll_y + h - 1 do
     for text_x = scroll_x to scroll_x + w - 1 do
       let character =
