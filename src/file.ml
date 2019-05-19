@@ -445,6 +445,22 @@ let delete_selection_or_character_backwards view =
   else
     delete_selection view cursor
 
+let delete_end_of_line view =
+  edit true view.file @@ fun () ->
+  foreach_cursor view @@ fun cursor ->
+  let text = view.file.text in
+  let x = cursor.position.x in
+  let y = cursor.position.y in
+  let characters, lines =
+    let length = Text.get_line_length y text in
+    if x >= length then
+      0, 1
+    else
+      length - x, 0
+  in
+  set_text view.file (Text.delete_region ~x ~y ~characters ~lines text);
+  update_all_marks_after_delete ~x ~y ~characters ~lines view.file.views
+
 let get_selected_text text cursor =
   let left, right = selection_boundaries cursor in
   (* The cursor itself is not included in the selection, hence the value of x2.

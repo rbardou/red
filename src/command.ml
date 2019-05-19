@@ -302,6 +302,10 @@ let () = define "delete_character_backwards" @@ fun state ->
   File.delete_selection_or_character_backwards state.focus.view;
   recenter_if_needed state
 
+let () = define "delete_end_of_line" @@ fun state ->
+  File.delete_end_of_line state.focus.view;
+  recenter_if_needed state
+
 let () = define "create_cursors_from_selection" @@ fun state ->
   let view = state.focus.view in
   match view.cursors with
