@@ -203,3 +203,17 @@ let insert_text ~x ~y ~sub (text: t): t =
 
   (* Replace it by inserting the lines of [sub]. *)
   Sequence.insert_sub y sub text
+
+let append_character character text =
+  if character = "\n" then
+    Sequence.append Line.empty text
+  else
+    let last_line_index = Sequence.count text - 1 in
+    let last_line =
+      match Sequence.get last_line_index text with
+        | None ->
+            Line.empty
+        | Some line ->
+            line
+    in
+    Sequence.set last_line_index (Line.append character last_line) text

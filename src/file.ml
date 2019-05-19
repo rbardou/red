@@ -296,11 +296,10 @@ let create_process file program arguments =
   Log.info "Created process: %s" program;
 
   (* Start reading. *)
-  let rec read alive file_descr =
+  let rec read alive (utf8_parser: Utf8.parser_state) file_descr =
     Spawn.on_read ~group file_descr @@ fun () ->
     let bytes = Bytes.create 8192 in
     let len = Unix.read file_descr bytes 0 8192 in
-    Log.info "Output from %s: %S" program (Bytes.sub_string bytes 0 len); (* TODO: put that in file.text *)
     if len = 0 then
       (
         file.loading <- No;
@@ -308,9 +307,25 @@ let create_process file program arguments =
         wait_pid program file pid
       )
     else
-      read alive file_descr
+      (
+        let rec parse_bytes utf8_parser i =
+          if i >= len then
+            read alive utf8_parser file_descr
+          else
+            match Utf8.add_char (Bytes.get bytes i) utf8_parser with
+              | Completed_ASCII char ->
+                  file.text <- Text.append_character (Character.of_ascii char) file.text;
+                  parse_bytes Started (i + 1)
+              | Completed_Unicode character ->
+                  file.text <- Text.append_character character file.text;
+                  parse_bytes Started (i + 1)
+              | utf8_parser ->
+                  parse_bytes utf8_parser (i + 1)
+        in
+        parse_bytes utf8_parser 0
+      )
   in
-  read true out_exit
+  read true Started out_exit
 
 let is_read_only file =
   match file.loading with

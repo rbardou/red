@@ -64,3 +64,6 @@ val sub: x1: int -> y1: int -> x2: int -> y2: int -> t -> t
 
 (** Insert a text inside a text. *)
 val insert_text: x: int -> y: int -> sub: t -> t -> t
+
+(** Append a character (which may in particular be [\n] to create a new line) to a text. *)
+val append_character: Character.t -> t -> t

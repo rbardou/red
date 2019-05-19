@@ -31,3 +31,5 @@ let output_channel ch line =
   Sequence.iter output_character line
 
 let sub = Sequence.sub
+
+let append = Sequence.append

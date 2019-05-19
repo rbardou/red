@@ -46,3 +46,6 @@ val output_channel: out_channel -> t -> unit
 
     Usage: [sub first last line] *)
 val sub: int -> int -> t -> t
+
+(** Append a character to a line. *)
+val append: Character.t -> t -> t
