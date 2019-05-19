@@ -383,9 +383,12 @@ let () = define "execute_command" @@ fun state ->
 let () = define "execute_process" @@ fun state ->
   let panel = state.focus in
   prompt "Execute process: " state @@ fun command ->
-  (* TODO: parse arguments *)
-  if command <> "" then (
-    let file = State.create_file state ("<" ^ command ^ ">") Text.empty in
-    panel.view <- File.create_view file;
-    File.create_process file command []
-  )
+  match Shell_lexer.items [] [] (Lexing.from_string command) with
+    | exception Failure reason ->
+        abort "parse error in command: %s" reason
+    | [] ->
+        ()
+    | program :: arguments ->
+        let file = State.create_file state ("<" ^ command ^ ">") Text.empty in
+        panel.view <- File.create_view file;
+        File.create_process file program arguments
