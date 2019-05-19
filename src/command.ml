@@ -370,3 +370,11 @@ let () = define "validate" @@ fun state ->
         validate panel.view.file.text
     | _ ->
         abort "focused panel is not a prompt"
+
+let () = define "execute_command" @@ fun state ->
+  prompt "Execute command: " state @@ fun name ->
+  match String_map.find name !commands with
+    | exception Not_found ->
+        abort "unbound command: %s" name
+    | command ->
+        command state

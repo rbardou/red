@@ -89,6 +89,7 @@ let main () =
   Alt_ctrl_s => "save_as";
   Ctrl_o => "open";
   Ctrl_n => "new";
+  Alt_letter_x => "execute_command";
 
   (* Prompt Bindings *)
   let (=>) = Command.bind Prompt state in
