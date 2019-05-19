@@ -38,6 +38,9 @@ type t =
     mutable modified: bool;
     mutable filename: string option;
 
+    mutable undo_stack: undo list;
+    mutable redo_stack: undo list;
+
     (* If [loading] is [Some (loaded, size, sub_strings_rev)], only [loaded] bytes out of [size]
        have been loaded, and [text] is read-only. *)
     mutable loading: (int * int * (string * int) list) option;
@@ -52,6 +55,28 @@ and view =
     mutable height: int; (* set when rendering *)
     mutable marks: mark list;
     mutable cursors: cursor list;
+  }
+
+and undo =
+  {
+    undo_text: Text.t;
+    undo_modified: bool;
+    undo_views: undo_view list;
+  }
+
+and undo_view =
+  {
+    undo_view: view;
+    undo_scroll_x: int;
+    undo_scroll_y: int;
+    undo_marks: undo_mark list;
+  }
+
+and undo_mark =
+  {
+    undo_mark: mark;
+    undo_x: int;
+    undo_y: int;
   }
 
 let create_cursor x y =
@@ -85,6 +110,8 @@ let create text =
     modified = false;
     filename = None;
     loading = None;
+    undo_stack = [];
+    redo_stack = [];
   }
 
 let create_loading filename =
@@ -279,6 +306,28 @@ let update_all_marks_after_delete ~x ~y ~characters ~lines views =
   let update_view view = update_marks_after_delete ~x ~y ~characters ~lines view.marks in
   List.iter update_view views
 
+let make_undo file =
+  let make_undo_mark mark =
+    {
+      undo_mark = mark;
+      undo_x = mark.x;
+      undo_y = mark.y;
+    }
+  in
+  let make_undo_view view =
+    {
+      undo_view = view;
+      undo_scroll_x = view.scroll_x;
+      undo_scroll_y = view.scroll_y;
+      undo_marks = List.map make_undo_mark view.marks;
+    }
+  in
+  {
+    undo_text = file.text;
+    undo_modified = file.modified;
+    undo_views = List.map make_undo_view file.views;
+  }
+
 let set_text file text =
   if is_read_only file then
     invalid_arg "set_text: file is read-only"
@@ -351,28 +400,36 @@ let reset_preferred_x file =
   foreach_cursor view @@ fun cursor ->
   cursor.preferred_x <- cursor.position.x
 
-let edit view f =
-  if is_read_only view.file then
+let edit save_undo file f =
+  if is_read_only file then
     Log.error "buffer is read-only"
   else (
-    f view;
-    reset_preferred_x view.file
+    if save_undo then
+      let undo = make_undo file in
+      f ();
+      file.undo_stack <- undo :: file.undo_stack;
+      file.redo_stack <- []
+    else
+      f ();
+    reset_preferred_x file;
   )
 
 let replace_selection_by_character character view =
-  edit view @@ fun view ->
+  (* TODO: false if consecutive *)
+  edit true view.file @@ fun () ->
   foreach_cursor view @@ fun cursor ->
   delete_selection view cursor;
   insert_character character view cursor
 
 let replace_selection_by_new_line view =
-  edit view @@ fun view ->
+  edit true view.file @@ fun () ->
   foreach_cursor view @@ fun cursor ->
   delete_selection view cursor;
   insert_new_line view cursor
 
 let delete_selection_or_character view =
-  edit view @@ fun view ->
+  (* TODO: false if consecutive *)
+  edit true view.file @@ fun () ->
   foreach_cursor view @@ fun cursor ->
   if selection_is_empty cursor then
     delete_character view cursor
@@ -380,7 +437,8 @@ let delete_selection_or_character view =
     delete_selection view cursor
 
 let delete_selection_or_character_backwards view =
-  edit view @@ fun view ->
+  (* TODO: false if consecutive *)
+  edit true view.file @@ fun () ->
   foreach_cursor view @@ fun cursor ->
   if selection_is_empty cursor then
     delete_character_backwards view cursor
@@ -398,13 +456,13 @@ let copy (global_clipboard: Clipboard.t) view =
   clipboard.text <- get_selected_text view.file.text cursor
 
 let cut (global_clipboard: Clipboard.t) view =
-  edit view @@ fun view ->
+  edit true view.file @@ fun () ->
   foreach_cursor_clipboard global_clipboard view @@ fun clipboard cursor ->
   clipboard.text <- get_selected_text view.file.text cursor;
   delete_selection view cursor
 
 let paste (global_clipboard: Clipboard.t) view =
-  edit view @@ fun view ->
+  edit true view.file @@ fun () ->
   foreach_cursor_clipboard global_clipboard view @@ fun clipboard cursor ->
 
   (* Replace selection with clipboard. *)
@@ -418,3 +476,39 @@ let paste (global_clipboard: Clipboard.t) view =
   let lines = Text.get_line_count sub - 1 in
   let characters = Text.get_line_length lines sub in
   update_all_marks_after_insert ~x ~y ~characters ~lines view.file.views
+
+let restore_undo_point file undo =
+  file.text <- undo.undo_text;
+  file.modified <- undo.undo_modified;
+  let undo_mark undo =
+    undo.undo_mark.x <- undo.undo_x;
+    undo.undo_mark.y <- undo.undo_y;
+  in
+  let undo_view undo =
+    undo.undo_view.scroll_x <- undo.undo_scroll_x;
+    undo.undo_view.scroll_y <- undo.undo_scroll_y;
+    List.iter undo_mark undo.undo_marks
+  in
+  List.iter undo_view undo.undo_views
+
+let undo file =
+  edit false file @@ fun () ->
+  match file.undo_stack with
+    | [] ->
+        Log.info "Nothing to undo."
+    | undo :: remaining_stack ->
+        Log.info "Undo.";
+        file.undo_stack <- remaining_stack;
+        file.redo_stack <- make_undo file :: file.redo_stack;
+        restore_undo_point file undo
+
+let redo file =
+  edit false file @@ fun () ->
+  match file.redo_stack with
+    | [] ->
+        Log.info "Nothing to redo."
+    | undo :: remaining_stack ->
+        Log.info "Redo.";
+        file.undo_stack <- make_undo file :: file.undo_stack;
+        file.redo_stack <- remaining_stack;
+        restore_undo_point file undo

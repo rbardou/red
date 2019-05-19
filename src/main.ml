@@ -68,6 +68,9 @@ let main () =
   Ctrl_x => "cut";
   Ctrl_v => "paste";
 
+  Ctrl_z => "undo";
+  Ctrl_y => "redo";
+
   (* File Bindings *)
   let (=>) = Command.bind File state in
 

@@ -338,6 +338,9 @@ let () = define "copy" @@ fun state -> File.copy state.clipboard state.focus.vie
 let () = define "cut" @@ fun state -> File.cut state.clipboard state.focus.view
 let () = define "paste" @@ fun state -> File.paste state.clipboard state.focus.view
 
+let () = define "undo" @@ fun state -> File.undo state.focus.view.file
+let () = define "redo" @@ fun state -> File.redo state.focus.view.file
+
 let () = define "validate" @@ fun state ->
   let panel = state.focus in
   match panel.kind with

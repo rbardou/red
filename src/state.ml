@@ -56,9 +56,9 @@ let on_key_press state (key: Key.t) =
           | exception Not_found ->
               match Key.symbol key with
                 | ASCII char ->
-                    File.replace_selection_by_character (String.make 1 char) state.focus.view
+                    catch (File.replace_selection_by_character (String.make 1 char)) state.focus.view
                 | Unicode character ->
-                    File.replace_selection_by_character character state.focus.view
+                    catch (File.replace_selection_by_character character) state.focus.view
                 | Control ->
                     Log.info "unbound key: %s" (Key.show key)
 
