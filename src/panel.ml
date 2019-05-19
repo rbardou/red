@@ -96,16 +96,14 @@ let render_file_status_bar has_focus (frame: Render.frame) (view: File.view) ~x 
 
   (* Render status text. *)
   let status_text =
-    let filename =
-      match file.filename with
-        | None ->
-            "(unnamed file)"
-        | Some filename ->
-            match file.loading with
-              | None ->
-                  filename
-              | Some (loaded, size, _) ->
-                  Printf.sprintf "%s (Loading: %d%%)" filename (loaded * 100 / size)
+    let loading =
+      match file.loading with
+        | No ->
+            ""
+        | File { loaded; size } ->
+            Printf.sprintf "(Loading: %d%%)" (loaded * 100 / size)
+        | Process name ->
+            "(Running...)"
     in
     let cursors =
       match view.cursors with
@@ -114,7 +112,7 @@ let render_file_status_bar has_focus (frame: Render.frame) (view: File.view) ~x 
         | cursors ->
             Printf.sprintf "(%d cursors)" (List.length cursors)
     in
-    String.concat " " [ filename; cursors ]
+    String.concat " " (List.filter ((<>) "") [ file.name; loading; cursors ])
   in
   Render.text ~style frame (x + 1) y (w - 1) status_text
 

@@ -84,13 +84,13 @@ let render state frame =
 let set_layout state layout =
   state.layout <- layout
 
-let create_file state text =
-  let file = File.create text in
+let create_file state name text =
+  let file = File.create name text in
   state.files <- file :: state.files;
   file
 
 let create_file_loading state filename =
-  let file = create_file state Text.empty in
+  let file = create_file state filename Text.empty in
   File.load file filename;
   file
 

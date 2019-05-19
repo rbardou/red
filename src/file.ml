@@ -31,11 +31,17 @@ let selection_is_empty cursor =
   cursor.position.x = cursor.selection_start.x &&
   cursor.position.y = cursor.selection_start.y
 
+type loading =
+  | No
+  | File of { loaded: int; size: int; sub_strings_rev: (string * int) list }
+  | Process of string
+
 type t =
   {
     mutable views: view list;
     mutable text: Text.t;
     mutable modified: bool;
+    mutable name: string;
     mutable filename: string option;
 
     mutable undo_stack: undo list;
@@ -43,7 +49,11 @@ type t =
 
     (* If [loading] is [Some (loaded, size, sub_strings_rev)], only [loaded] bytes out of [size]
        have been loaded, and [text] is read-only. *)
-    mutable loading: (int * int * (string * int) list) option;
+    mutable loading: loading;
+    mutable spawn_group: Spawn.group option;
+
+    mutable live_process_ids: int list;
+    mutable open_file_descriptors: Unix.file_descr list;
   }
 
 and view =
@@ -79,6 +89,65 @@ and undo_mark =
     undo_y: int;
   }
 
+(* If [file_descr] is in [file.open_file_descriptors], close it. *)
+let close_file_descriptor file file_descr =
+  let rec find acc list =
+    match list with
+      | [] ->
+          List.rev acc
+      | head :: tail ->
+          if head = file_descr then
+            (
+              Unix.close head; (* TODO: error handling *)
+              List.rev_append acc tail
+            )
+          else
+            find (head :: acc) tail
+  in
+  file.open_file_descriptors <- find [] file.open_file_descriptors
+
+(* Wait for [pid] to terminate, in the background. *)
+let rec spawn_wait_pid name pid =
+  match Unix.waitpid [ WNOHANG ] pid with
+    | 0, _ ->
+        (* Process is still running. Usually, processes are already dead when their output is closed though. *)
+        (* TODO: better way to wait than Spawn.sleep ?? *)
+        Spawn.sleep 1. @@ fun () ->
+        spawn_wait_pid name pid
+    | _, WEXITED code ->
+        if name <> "" then Log.info "Process %s exited with code: %d" name code
+    | _, WSIGNALED signal ->
+        (* TODO: convert signal number *)
+        if name <> "" then Log.info "Process %s was killed by signal: %d" name signal
+    | _, WSTOPPED signal ->
+        (* TODO: convert signal number *)
+        if name <> "" then Log.info "Process %s was stopped by signal: %d" name signal
+
+(* If [pid] is in [file.live_process_ids], spawn a process to collect it. *)
+let wait_pid name file pid =
+  let rec find acc list =
+    match list with
+      | [] ->
+          List.rev acc
+      | head :: tail ->
+          if head = pid then
+            (
+              spawn_wait_pid name pid;
+              List.rev_append acc tail
+            )
+          else
+            find (head :: acc) tail
+  in
+  file.live_process_ids <- find [] file.live_process_ids
+
+let close_all_file_descriptors file =
+  List.iter Unix.close file.open_file_descriptors; (* TODO: error handling *)
+  file.open_file_descriptors <- []
+
+let wait_all_pids file =
+  List.iter (spawn_wait_pid "") file.live_process_ids; (* TODO: error handling *)
+  file.live_process_ids <- []
+
 let create_cursor x y =
   {
     selection_start = { x; y };
@@ -110,16 +179,56 @@ let create_view file =
   view
 
 (* You may want to use [State.create_file] instead. *)
-let create text =
+let create name text =
   {
     views = [];
     text;
     modified = false;
+    name;
     filename = None;
-    loading = None;
+    loading = No;
     undo_stack = [];
     redo_stack = [];
+    spawn_group = None;
+    live_process_ids = [];
+    open_file_descriptors = [];
   }
+
+let kill_spawn_group file =
+  match file.spawn_group with
+    | None ->
+        ()
+    | Some group ->
+        Spawn.kill group;
+        file.spawn_group <- None
+
+(* Reset a file to an empty text as if it was created by [create].
+   Keep views, but reset them as well. *)
+let reset file =
+  (* Reset file. *)
+  file.text <- Text.empty;
+  file.filename <- None;
+  file.loading <- No;
+  file.modified <- false;
+  file.undo_stack <- [];
+  file.redo_stack <- [];
+  kill_spawn_group file;
+  close_all_file_descriptors file;
+  wait_all_pids file;
+
+  (* Reset views. *)
+  foreach_view file @@ fun view ->
+  view.scroll_x <- 0;
+  view.scroll_y <- 0;
+  let cursor = create_cursor 0 0 in
+  view.marks <- [ cursor.selection_start; cursor.position ];
+  view.cursors <- [ cursor ]
+
+let create_spawn_group file =
+  kill_spawn_group file;
+  let group = Spawn.group () in
+  file.spawn_group <- Some group;
+  group
 
 let load file filename =
   let file_descr =
@@ -130,33 +239,19 @@ let load file filename =
     (* TODO: error handling *)
     (Unix.fstat file_descr).st_size
   in
-
-  (* Reset views. *)
-  (
-    foreach_view file @@ fun view ->
-    view.scroll_x <- 0;
-    view.scroll_y <- 0;
-    let cursor = create_cursor 0 0 in
-    view.marks <- [ cursor.selection_start; cursor.position ];
-    view.cursors <- [ cursor ];
-  );
-
-  (* Reset file. *)
-  file.text <- Text.empty;
+  reset file;
   file.filename <- Some filename;
-  file.loading <- Some (0, size, []);
-  file.modified <- false;
-  file.undo_stack <- [];
-  file.redo_stack <- [];
+  file.loading <- File { loaded = 0; size; sub_strings_rev = [] };
+  file.open_file_descriptors <- file_descr :: file.open_file_descriptors;
+  let group = create_spawn_group file in
 
   (* Start loading. *)
   let rec load () =
-    (* TODO: group, so that if we kill this file, we kill the reader *)
-    Spawn.on_read file_descr @@ fun () ->
+    Spawn.on_read ~group file_descr @@ fun () ->
     match file.loading with
-      | None ->
+      | No | Process _ ->
           assert false (* did someone else temper with this file? *)
-      | Some (loaded, size, sub_strings_rev) ->
+      | File { loaded; size; sub_strings_rev } ->
           let bytes = Bytes.create 8192 in
           let len = Unix.read file_descr bytes 0 8192 in
           if len = 0 then
@@ -164,20 +259,64 @@ let load file filename =
                Replace it by some kind of iterative parser. *)
             let text = Text.of_utf8_substrings_offset_0 (List.rev sub_strings_rev) in
             file.text <- text;
-            Unix.close file_descr; (* TODO: error handling *)
-            file.loading <- None
+            close_file_descriptor file file_descr;
+            file.loading <- No
           else
             let sub_strings_rev = (Bytes.unsafe_to_string bytes, len) :: sub_strings_rev in
-            file.loading <- Some (loaded + len, size, sub_strings_rev);
+            file.loading <- File { loaded = loaded + len; size; sub_strings_rev };
             load ()
   in
   load ()
 
+let create_process file program arguments =
+  reset file;
+  file.filename <- None;
+  file.loading <- Process program;
+  let group = create_spawn_group file in
+
+  (* Create process. *)
+  (* TODO: error handling for all Unix commands. *)
+  let in_exit, in_entry = Unix.pipe () in
+  let out_exit, out_entry = Unix.pipe () in
+  Unix.set_close_on_exec in_entry;
+  Unix.set_close_on_exec out_exit;
+  let pid =
+    Unix.create_process
+      program
+      (Array.of_list (program :: arguments))
+      in_exit
+      out_entry
+      out_entry
+  in
+  Unix.close in_exit;
+  Unix.close out_entry;
+  Unix.close in_entry; (* We won't send inputs to the process. *)
+  file.open_file_descriptors <- out_exit :: file.open_file_descriptors;
+  file.live_process_ids <- pid :: file.live_process_ids;
+  Log.info "Created process: %s" program;
+
+  (* Start reading. *)
+  let rec read alive file_descr =
+    Spawn.on_read ~group file_descr @@ fun () ->
+    let bytes = Bytes.create 8192 in
+    let len = Unix.read file_descr bytes 0 8192 in
+    Log.info "Output from %s: %S" program (Bytes.sub_string bytes 0 len); (* TODO: put that in file.text *)
+    if len = 0 then
+      (
+        file.loading <- No;
+        close_file_descriptor file file_descr;
+        wait_pid program file pid
+      )
+    else
+      read alive file_descr
+  in
+  read true out_exit
+
 let is_read_only file =
   match file.loading with
-    | None ->
+    | No ->
         false
-    | Some _ ->
+    | File _ | Process _ ->
         true
 
 (* Iterate on cursors and their clipboards.

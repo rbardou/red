@@ -3,10 +3,10 @@ let main () =
   let files =
     match Array.to_list Sys.argv with
       | [] | [ _ ] ->
-          [ File.create Text.empty ]
+          [ File.create "(new file)" Text.empty ]
       | _ :: filenames ->
           let load_file filename =
-            let file = File.create Text.empty in
+            let file = File.create filename Text.empty in
             File.load file filename;
             file
           in
@@ -90,6 +90,7 @@ let main () =
   Ctrl_o => "open";
   Ctrl_n => "new";
   Alt_letter_x => "execute_command";
+  Alt_ctrl_x => "execute_process";
 
   (* Prompt Bindings *)
   let (=>) = Command.bind Prompt state in

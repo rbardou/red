@@ -142,6 +142,7 @@ let select_all view =
 
 let save (file: File.t) filename =
   if filename <> "" then (
+    file.name <- filename;
     file.filename <- Some filename;
 
     if not (System.file_exists filename) then
@@ -169,7 +170,7 @@ let prompt ?(global = false) ?(default = "") (prompt: string) (state: State.t) (
   (* Create prompt panel. *)
   let prompt_panel =
     let initial_focus = state.focus in
-    let file = File.create (Text.one_line (Line.of_utf8_string default)) in
+    let file = File.create prompt (Text.one_line (Line.of_utf8_string default)) in
     let view = File.create_view file in
     select_all view;
     let validate text =
@@ -253,7 +254,7 @@ let () = define "open" @@ fun state ->
 
 let () = define "new" @@ fun state ->
   let panel = state.focus in
-  let file = State.create_file state Text.empty in
+  let file = State.create_file state "(new file)" Text.empty in
   let view = File.create_view file in
   panel.view <- view
 
@@ -378,3 +379,13 @@ let () = define "execute_command" @@ fun state ->
         abort "unbound command: %s" name
     | command ->
         command state
+
+let () = define "execute_process" @@ fun state ->
+  let panel = state.focus in
+  prompt "Execute process: " state @@ fun command ->
+  (* TODO: parse arguments *)
+  if command <> "" then (
+    let file = File.create ("<" ^ command ^ ">") Text.empty in
+    panel.view <- File.create_view file;
+    File.create_process file command []
+  )

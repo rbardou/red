@@ -150,7 +150,7 @@ let run_once () =
           (File_descr_map.keys pending_writes)
           []
           timeout
-      with Unix.Unix_error _ ->
+      with Unix.Unix_error (Unix.EINTR, _, _) ->
         (* Maybe interrupted because of a signal or something. *)
         [], [], []
     else
