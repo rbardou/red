@@ -182,39 +182,17 @@ let save (file: File.t) filename =
     file.modified <- false
   )
 
-(******************************************************************************)
-(*                                 Definitions                                *)
-(******************************************************************************)
-
-(* TODO: if there are modified files, prompt for confirmation. *)
-let () = define "quit" @@ fun state -> raise State.Exit
-
-let () = define "save" @@ fun state ->
-  let file = state.focus.view.file in
-  match file.filename with
-    | None ->
-        Log.info "TODO: prompt for file name"
-    | Some filename ->
-        save file filename
-
-let () = define "save_as" @@ fun state ->
-  let file_to_save = state.focus.view.file in
+let prompt ?(default = "") (prompt: string) (state: State.t) (validate: string -> unit) =
+  (* Create prompt panel. *)
   let prompt_panel =
-    let file =
-      let filename_text =
-        match file_to_save.filename with
-          | None ->
-              Text.empty
-          | Some filename ->
-              Text.one_line (Line.of_utf8_string filename)
-      in
-      File.create filename_text
-    in
+    let file = File.create (Text.one_line (Line.of_utf8_string default)) in
     let view = File.create_view file in
     select_all view;
-    let validate filename = save file_to_save (Text.to_string filename) in
-    Panel.create (Prompt { prompt = "Save as: "; validate }) view
+    let validate text = validate (Text.to_string text) in
+    Panel.create (Prompt { prompt; validate }) view
   in
+
+  (* Add panel to layout and focus it. *)
   let new_layout =
     let new_sublayout =
       Layout.split Vertical ~pos: (Absolute_second 1) ~main: Second
@@ -228,6 +206,36 @@ let () = define "save_as" @@ fun state ->
   in
   State.set_layout state new_layout;
   state.focus <- prompt_panel
+
+(******************************************************************************)
+(*                                 Definitions                                *)
+(******************************************************************************)
+
+(* TODO: if there are modified files, prompt for confirmation.
+   Don't use an exception but a flag in [state]? *)
+let () = define "quit" @@ fun state -> raise State.Exit
+
+let () = define "save" @@ fun state ->
+  let file_to_save = state.focus.view.file in
+  match file_to_save.filename with
+    | None ->
+        prompt ?default: file_to_save.filename "Save as: " state (save file_to_save)
+    | Some filename ->
+        save file_to_save filename
+
+let () = define "save_as" @@ fun state ->
+  let file_to_save = state.focus.view.file in
+  prompt ?default: file_to_save.filename "Save as: " state (save file_to_save)
+
+let () = define "open" @@ fun state ->
+  let panel = state.focus in
+  prompt "Open file: " state @@ fun filename ->
+  if filename <> "" then (
+    if not (System.file_exists filename) then abort "file does not exist: %S" filename;
+    let file = File.create_loading filename in
+    let view = File.create_view file in
+    panel.view <- view
+  )
 
 let () = define "remove_panel" @@ fun state ->
   remove_panel state.focus state
