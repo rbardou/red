@@ -10,14 +10,20 @@ type kind =
 
 type t =
   {
-    mutable view: File.view;
     kind: kind;
+    mutable view: File.view;
   }
 
 let create kind view =
   {
-    view;
     kind;
+    view;
+  }
+
+let create_file file =
+  {
+    kind = File;
+    view = File.create_view file;
   }
 
 (* Render text and cursors for a given view. *)

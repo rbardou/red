@@ -1,28 +1,40 @@
 let main () =
-  let state =
-    let file = File.create Text.empty in
-    if Array.length Sys.argv > 1 then File.load file Sys.argv.(1);
-    let panel_1 =
-      let view = File.create_view file in
-      Panel.create File view
-    in
-    let panel_2 =
-      let view = File.create_view file in
-      Panel.create File view
-    in
-    let panel_3 =
-      let view = File.create_view file in
-      Panel.create File view
-    in
-    let layout =
-      Layout.split Vertical
-        (Layout.split Horizontal ~sep: true (Layout.single panel_1) (Layout.single panel_2))
-        (Layout.single panel_3)
-    in
-    let state = State.create layout in
-    state.files <- [ file ];
-    state
+  (* Load files given on the command line. *)
+  let files =
+    match Array.to_list Sys.argv with
+      | [] | [ _ ] ->
+          [ File.create Text.empty ]
+      | _ :: filenames ->
+          let load_file filename =
+            let file = File.create Text.empty in
+            File.load file filename;
+            file
+          in
+          List.map load_file filenames
   in
+
+  (* Choose a layout depending on the number of files. *)
+  let layout =
+    match files with
+      | [] ->
+          assert false (* impossible, we created at least one empty file *)
+      | [ file ] ->
+          Layout.create_file file
+      | [ file_1; file_2 ] ->
+          Layout.split Horizontal ~sep: true (Layout.create_file file_1) (Layout.create_file file_2)
+      | [ file_1; file_2; file_3 ] ->
+          Layout.split Vertical
+            (Layout.split Horizontal ~sep: true (Layout.create_file file_1) (Layout.create_file file_2))
+            (Layout.create_file file_3)
+      | file_1 :: file_2 :: file_3 :: file_4 :: _ ->
+          Layout.split Vertical
+            (Layout.split Horizontal ~sep: true (Layout.create_file file_1) (Layout.create_file file_2))
+            (Layout.split Horizontal ~sep: true (Layout.create_file file_3) (Layout.create_file file_4))
+  in
+
+  (* Create initial state. *)
+  let state = State.create layout in
+  state.files <- files;
 
   (* Global Bindings *)
   let (=>) = Command.bind Global state in

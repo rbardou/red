@@ -28,6 +28,9 @@ and split =
 let single panel =
   Single panel
 
+let create_file file =
+  Single (Panel.create_file file)
+
 let split direction ?(pos = Ratio (1, 2)) ?(sep = false) ?(main = First) first second =
   Split {
     direction;

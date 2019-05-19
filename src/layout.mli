@@ -22,6 +22,9 @@ type t
 (** A layout with a single panel. *)
 val single: Panel.t -> t
 
+(** Create a view for a file, create a panel for this view, and return a single layout for this panel. *)
+val create_file: File.t -> t
+
 (** A layout split in two. *)
 val split: split_direction -> ?pos: split_position -> ?sep: bool -> ?main: split_main -> t -> t -> t
 
