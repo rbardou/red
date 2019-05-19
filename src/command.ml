@@ -1,13 +1,5 @@
 module String_map = Map.Make (String)
 
-module Int =
-struct
-  type t = int
-  let compare = (Pervasives.compare: int -> int -> int)
-end
-
-module Int_set = Set.Make (Int)
-
 let commands = ref String_map.empty
 
 let define name (f: State.t -> unit) =
@@ -312,27 +304,31 @@ let () = define "delete_character_backwards" @@ fun state ->
 
 let () = define "create_cursors_from_selection" @@ fun state ->
   let view = state.focus.view in
-
-  (* Compute the list of y coordinates. *)
-  let rec gather_cursors lines (cursor: File.cursor) =
-    let rec gather_lines lines start finish =
-      if finish < start then
-        lines
-      else
-        let lines = Int_set.add finish lines in
-        gather_lines lines start (finish - 1)
-    in
-    let left, right = File.selection_boundaries cursor in
-    gather_lines lines left.y right.y
-  in
-  let lines =
-    view.cursors
-    |> List.fold_left gather_cursors Int_set.empty
-    |> Int_set.elements
-  in
-
-  (* Replace cursors with new cursors. *)
-  File.set_cursors view (List.map (File.create_cursor 0) lines)
+  match view.cursors with
+    | [] ->
+        ()
+    | cursor :: _ :: _ ->
+        view.cursors <- [ cursor ]
+    | [ cursor ] ->
+        let first, last, reverse =
+          let sel_y = cursor.selection_start.y in
+          let cur_y = cursor.position.y in
+          if sel_y <= cur_y then
+            sel_y, cur_y, true
+          else
+            cur_y, sel_y, false
+        in
+        let rec range acc first last =
+          if last < first then
+            acc
+          else
+            range (last :: acc) first (last - 1)
+        in
+        let text = view.file.text in
+        let create_cursor y = File.create_cursor (min (Text.get_line_length y text) cursor.position.x) y in
+        let cursors = List.map create_cursor (range [] first last) in
+        let cursors = if reverse then List.rev cursors else cursors in
+        File.set_cursors view cursors
 
 let () = define "copy" @@ fun state -> File.copy state.clipboard state.focus.view
 let () = define "cut" @@ fun state -> File.cut state.clipboard state.focus.view
