@@ -34,7 +34,7 @@ let rec spawn_input_reader
         | state ->
             loop state (i + 1)
   in
-  loop state 0
+  if len > 0 then loop state 0
 
 let run_raw_mode
     ~on_key_press
