@@ -237,6 +237,12 @@ let () = define "open" @@ fun state ->
     panel.view <- view
   )
 
+let () = define "new" @@ fun state ->
+  let panel = state.focus in
+  let file = File.create Text.empty in
+  let view = File.create_view file in
+  panel.view <- view
+
 let () = define "remove_panel" @@ fun state ->
   remove_panel state.focus state
 
