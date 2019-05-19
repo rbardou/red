@@ -385,7 +385,7 @@ let () = define "execute_process" @@ fun state ->
   prompt "Execute process: " state @@ fun command ->
   (* TODO: parse arguments *)
   if command <> "" then (
-    let file = File.create ("<" ^ command ^ ">") Text.empty in
+    let file = State.create_file state ("<" ^ command ^ ">") Text.empty in
     panel.view <- File.create_view file;
     File.create_process file command []
   )

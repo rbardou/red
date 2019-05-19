@@ -105,6 +105,17 @@ let render_file_status_bar has_focus (frame: Render.frame) (view: File.view) ~x 
         | Process name ->
             "(Running...)"
     in
+    let process_status =
+      match file.process_status with
+        | None | Some (WEXITED 0) ->
+            ""
+        | Some (WEXITED code) ->
+            Printf.sprintf "(exited with code %d)" code
+        | Some (WSIGNALED signal) ->
+            Printf.sprintf "(killed by signal %d)" signal
+        | Some (WSTOPPED signal) ->
+            Printf.sprintf "(stopped by signal %d)" signal
+    in
     let cursors =
       match view.cursors with
         | [ cursor ] ->
@@ -112,7 +123,7 @@ let render_file_status_bar has_focus (frame: Render.frame) (view: File.view) ~x 
         | cursors ->
             Printf.sprintf "(%d cursors)" (List.length cursors)
     in
-    String.concat " " (List.filter ((<>) "") [ file.name; loading; cursors ])
+    String.concat " " (List.filter ((<>) "") [ file.name; loading; process_status; cursors ])
   in
   Render.text ~style frame (x + 1) y (w - 1) status_text
 

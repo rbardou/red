@@ -52,6 +52,7 @@ type t =
     mutable loading: loading;
     mutable spawn_group: Spawn.group option;
 
+    mutable process_status: Unix.process_status option;
     mutable live_process_ids: int list;
     mutable open_file_descriptors: Unix.file_descr list;
   }
@@ -107,21 +108,15 @@ let close_file_descriptor file file_descr =
   file.open_file_descriptors <- find [] file.open_file_descriptors
 
 (* Wait for [pid] to terminate, in the background. *)
-let rec spawn_wait_pid name pid =
-  match Unix.waitpid [ WNOHANG ] pid with
-    | 0, _ ->
-        (* Process is still running. Usually, processes are already dead when their output is closed though. *)
-        (* TODO: better way to wait than Spawn.sleep ?? *)
-        Spawn.sleep 1. @@ fun () ->
-        spawn_wait_pid name pid
-    | _, WEXITED code ->
-        if name <> "" then Log.info "Process %s exited with code: %d" name code
-    | _, WSIGNALED signal ->
-        (* TODO: convert signal number *)
-        if name <> "" then Log.info "Process %s was killed by signal: %d" name signal
-    | _, WSTOPPED signal ->
-        (* TODO: convert signal number *)
-        if name <> "" then Log.info "Process %s was stopped by signal: %d" name signal
+let rec spawn_wait_pid name file pid =
+  let waitpid_result_pid, status = Unix.waitpid [ WNOHANG ] pid in
+  if waitpid_result_pid = 0 then
+    (* Process is still running. Usually, processes are already dead when their output is closed though. *)
+    (* TODO: better way to wait than Spawn.sleep ?? *)
+    Spawn.sleep 1. @@ fun () ->
+    spawn_wait_pid name file pid
+  else
+    file.process_status <- Some status
 
 (* If [pid] is in [file.live_process_ids], spawn a process to collect it. *)
 let wait_pid name file pid =
@@ -132,7 +127,7 @@ let wait_pid name file pid =
       | head :: tail ->
           if head = pid then
             (
-              spawn_wait_pid name pid;
+              spawn_wait_pid name file pid;
               List.rev_append acc tail
             )
           else
@@ -145,7 +140,7 @@ let close_all_file_descriptors file =
   file.open_file_descriptors <- []
 
 let wait_all_pids file =
-  List.iter (spawn_wait_pid "") file.live_process_ids; (* TODO: error handling *)
+  List.iter (spawn_wait_pid "" file) file.live_process_ids; (* TODO: error handling *)
   file.live_process_ids <- []
 
 let create_cursor x y =
@@ -190,6 +185,7 @@ let create name text =
     undo_stack = [];
     redo_stack = [];
     spawn_group = None;
+    process_status = None;
     live_process_ids = [];
     open_file_descriptors = [];
   }
@@ -213,6 +209,7 @@ let reset file =
   file.undo_stack <- [];
   file.redo_stack <- [];
   kill_spawn_group file;
+  file.process_status <- None;
   close_all_file_descriptors file;
   wait_all_pids file;
 
@@ -293,7 +290,6 @@ let create_process file program arguments =
   Unix.close in_entry; (* We won't send inputs to the process. *)
   file.open_file_descriptors <- out_exit :: file.open_file_descriptors;
   file.live_process_ids <- pid :: file.live_process_ids;
-  Log.info "Created process: %s" program;
 
   (* Start reading. *)
   let rec read alive (utf8_parser: Utf8.parser_state) file_descr =
