@@ -171,7 +171,11 @@ let save (file: File.t) filename =
         Log.info "Moved to: %s" filename
       );
 
-    file.modified <- false
+    file.modified <- false;
+
+    (* Clear undo stack (at the very least we should set the modified flags in all undo points). *)
+    file.undo_stack <- [];
+    file.redo_stack <- [];
   )
 
 let prompt ?(global = false) ?(default = "") (prompt: string) (state: State.t) (validate: string -> unit) =
