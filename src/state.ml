@@ -8,6 +8,10 @@ type t =
     mutable file_bindings: (t -> unit) Key.Map.t;
     mutable prompt_bindings: (t -> unit) Key.Map.t;
 
+    (* Files to check for modification before exiting.
+       Also files that should not be reopened (reuse them instead). *)
+    mutable files: File.t list;
+
     clipboard: Clipboard.t;
   }
 
@@ -26,6 +30,7 @@ let create ?focus layout =
     file_bindings = Key.Map.empty;
     prompt_bindings = Key.Map.empty;
     clipboard = { text = Text.empty };
+    files = [];
   }
 
 exception Exit
@@ -72,3 +77,13 @@ let render state frame =
 
 let set_layout state layout =
   state.layout <- layout
+
+let create_file state text =
+  let file = File.create text in
+  state.files <- file :: state.files;
+  file
+
+let create_file_loading state filename =
+  let file = create_file state Text.empty in
+  File.load file filename;
+  file

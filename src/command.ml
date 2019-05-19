@@ -174,38 +174,69 @@ let save (file: File.t) filename =
     file.modified <- false
   )
 
-let prompt ?(default = "") (prompt: string) (state: State.t) (validate: string -> unit) =
+let prompt ?(global = false) ?(default = "") (prompt: string) (state: State.t) (validate: string -> unit) =
   (* Create prompt panel. *)
   let prompt_panel =
+    let initial_focus = state.focus in
     let file = File.create (Text.one_line (Line.of_utf8_string default)) in
     let view = File.create_view file in
     select_all view;
-    let validate text = validate (Text.to_string text) in
+    let validate text =
+      if global && Layout.panel_is_visible initial_focus state.layout then state.focus <- initial_focus;
+      validate (Text.to_string text)
+    in
     Panel.create (Prompt { prompt; validate }) view
   in
 
   (* Add panel to layout and focus it. *)
   let new_layout =
-    let new_sublayout =
+    if global then
+      (* Split the whole layout. *)
       Layout.split Vertical ~pos: (Absolute_second 1) ~main: Second
-        (Layout.single state.focus) (Layout.single prompt_panel)
-    in
-    match Layout.replace_panel state.focus new_sublayout state.layout with
-      | None ->
-          abort "focused panel is not in current layout"
-      | Some new_layout ->
-          new_layout
+        state.layout (Layout.single prompt_panel)
+    else
+      (* Split focused panel. *)
+      let new_sublayout =
+        Layout.split Vertical ~pos: (Absolute_second 1) ~main: Second
+          (Layout.single state.focus) (Layout.single prompt_panel)
+      in
+      match Layout.replace_panel state.focus new_sublayout state.layout with
+        | None ->
+            abort "focused panel is not in current layout"
+        | Some new_layout ->
+            new_layout
   in
   State.set_layout state new_layout;
   state.focus <- prompt_panel
+
+let rec prompt_confirmation ?global ?(repeated = false) message state confirm =
+  let message = if repeated then "Please answer yes or no. " ^ message else message in
+  prompt ?global ~default: "no" message state @@ fun response ->
+  if String.lowercase_ascii response = "yes" then
+    confirm ()
+  else if String.lowercase_ascii response = "no" then
+    ()
+  else
+    prompt_confirmation ?global ~repeated: true message state confirm
 
 (******************************************************************************)
 (*                                 Definitions                                *)
 (******************************************************************************)
 
-(* TODO: if there are modified files, prompt for confirmation.
-   Don't use an exception but a flag in [state]? *)
-let () = define "quit" @@ fun state -> raise State.Exit
+let () = define "quit" @@ fun state ->
+  let modified_files = List.filter (fun (file: File.t) -> file.modified) state.files in
+  let modified_file_count = List.length modified_files in
+  if modified_file_count = 0 then
+    raise State.Exit
+  else
+    let message =
+      if modified_file_count = 1 then
+        "There is 1 modified file, really exit? "
+      else
+        "There are " ^ string_of_int modified_file_count ^ " modified file(s), really exit? "
+    in
+    prompt_confirmation ~global: true message state @@ fun () ->
+    raise State.Exit
 
 let () = define "save" @@ fun state ->
   let file_to_save = state.focus.view.file in
@@ -224,14 +255,14 @@ let () = define "open" @@ fun state ->
   prompt "Open file: " state @@ fun filename ->
   if filename <> "" then (
     if not (System.file_exists filename) then abort "file does not exist: %S" filename;
-    let file = File.create_loading filename in
+    let file = State.create_file_loading state filename in
     let view = File.create_view file in
     panel.view <- view
   )
 
 let () = define "new" @@ fun state ->
   let panel = state.focus in
-  let file = File.create Text.empty in
+  let file = State.create_file state Text.empty in
   let view = File.create_view file in
   panel.view <- view
 

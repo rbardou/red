@@ -59,3 +59,6 @@ val replace_panel: Panel.t -> t -> t -> t option
     Return [None] if panel was not found in layout or if it is the only panel.
     Also return the panel which was next to the removed panel. *)
 val remove_panel: Panel.t -> t -> (t * Panel.t) option
+
+(** Return whether a panel is visible in a layout. *)
+val panel_is_visible: Panel.t -> t -> bool

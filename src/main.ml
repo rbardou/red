@@ -1,11 +1,7 @@
 let main () =
   let state =
-    let file =
-      if Array.length Sys.argv > 1 then
-        File.create_loading Sys.argv.(1)
-      else
-        File.create Text.empty
-    in
+    let file = File.create Text.empty in
+    if Array.length Sys.argv > 1 then File.load file Sys.argv.(1);
     let panel_1 =
       let view = File.create_view file in
       Panel.create File view
@@ -23,7 +19,9 @@ let main () =
         (Layout.split Horizontal ~sep: true (Layout.single panel_1) (Layout.single panel_2))
         (Layout.single panel_3)
     in
-    State.create layout
+    let state = State.create layout in
+    state.files <- [ file ];
+    state
   in
 
   (* Global Bindings *)

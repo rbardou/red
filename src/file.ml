@@ -87,6 +87,12 @@ let create_cursor x y =
     clipboard = { text = Text.empty };
   }
 
+let foreach_view file f =
+  List.iter f file.views
+
+let foreach_cursor view f =
+  List.iter f view.cursors
+
 let create_view file =
   let cursor = create_cursor 0 0 in
   let view =
@@ -103,6 +109,7 @@ let create_view file =
   file.views <- view :: file.views;
   view
 
+(* You may want to use [State.create_file] instead. *)
 let create text =
   {
     views = [];
@@ -114,7 +121,7 @@ let create text =
     redo_stack = [];
   }
 
-let create_loading filename =
+let load file filename =
   let file_descr =
     (* TODO: error handling (e.g. file does not exist) *)
     Unix.openfile filename [ O_RDONLY ] 0o640
@@ -124,10 +131,25 @@ let create_loading filename =
     (Unix.fstat file_descr).st_size
   in
 
-  let file = create Text.empty in
+  (* Reset views. *)
+  (
+    foreach_view file @@ fun view ->
+    view.scroll_x <- 0;
+    view.scroll_y <- 0;
+    let cursor = create_cursor 0 0 in
+    view.marks <- [ cursor.selection_start; cursor.position ];
+    view.cursors <- [ cursor ];
+  );
+
+  (* Reset file. *)
+  file.text <- Text.empty;
   file.filename <- Some filename;
   file.loading <- Some (0, size, []);
+  file.modified <- false;
+  file.undo_stack <- [];
+  file.redo_stack <- [];
 
+  (* Start loading. *)
   let rec load () =
     (* TODO: group, so that if we kill this file, we kill the reader *)
     Spawn.on_read file_descr @@ fun () ->
@@ -142,15 +164,14 @@ let create_loading filename =
                Replace it by some kind of iterative parser. *)
             let text = Text.of_utf8_substrings_offset_0 (List.rev sub_strings_rev) in
             file.text <- text;
+            Unix.close file_descr; (* TODO: error handling *)
             file.loading <- None
           else
             let sub_strings_rev = (Bytes.unsafe_to_string bytes, len) :: sub_strings_rev in
             file.loading <- Some (loaded + len, size, sub_strings_rev);
             load ()
   in
-  load ();
-
-  file
+  load ()
 
 let is_read_only file =
   match file.loading with
@@ -158,12 +179,6 @@ let is_read_only file =
         false
     | Some _ ->
         true
-
-let foreach_view file f =
-  List.iter f file.views
-
-let foreach_cursor view f =
-  List.iter f view.cursors
 
 (* Iterate on cursors and their clipboards.
    If there is only one cursor, use global clipboard instead of cursor clipboard. *)

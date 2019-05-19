@@ -307,3 +307,10 @@ let remove_panel panel layout =
         None
     | Panel_found_and_removed (new_layout, next_panel) ->
         Some (new_layout, next_panel)
+
+let rec panel_is_visible panel layout =
+  match layout with
+    | Single single_panel ->
+        single_panel == panel
+    | Split { first; second } ->
+        panel_is_visible panel first || panel_is_visible panel second
