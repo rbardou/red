@@ -1,30 +1,15 @@
-type prompt =
-  {
-    prompt: string;
-    validate: Text.t -> unit;
-  }
-
-type kind =
-  | File
-  | Prompt of prompt
-
 type t =
   {
-    kind: kind;
     mutable view: File.view;
   }
 
-let create kind view =
+let create view =
   {
-    kind;
     view;
   }
 
 let create_file file =
-  {
-    kind = File;
-    view = File.create_view file;
-  }
+  create (File.create_view File file)
 
 (* Render text and cursors for a given view. *)
 let render_view
@@ -127,10 +112,69 @@ let render_file_status_bar has_focus (frame: Render.frame) (view: File.view) ~x 
   in
   Render.text ~style frame (x + 1) y (w - 1) status_text
 
+let render_prompt has_focus (frame: Render.frame) view prompt ~x ~y ~w =
+  (* For now we assume prompts contain only ASCII characters. *)
+  let prompt_length = String.length prompt in
+
+  (* Render prompt. *)
+  let style =
+    if has_focus then
+      Render.style ~bg_color: Cyan ~fg_color: Black ()
+    else
+      Render.style ~bg_color: White ~fg_color: Black ()
+  in
+  Render.text ~style frame x y (min w prompt_length) prompt;
+
+  (* Render prompt input area. *)
+  render_view
+    ~style
+    ~cursor_style: (Render.style ~fg_color: Black ~bg_color: Yellow ())
+    ~selection_style: (Render.style ~fg_color: Black ~bg_color: White ())
+    frame view ~x: (x + prompt_length) ~y ~w: (w - prompt_length) ~h: 1
+
+let render_choice_list (frame: Render.frame) choices choice ~x ~y ~w ~h =
+  let rec loop index choices =
+    let y = y + h - 1 - index in
+    if y >= 0 then
+      match choices with
+        | [] ->
+            ()
+        | head :: tail ->
+            let style =
+              if index = choice then
+                Render.style ~fg_color: Black ~bg_color: White ()
+              else
+                Render.default
+            in
+            Render.text ~style frame x y w head;
+            loop (index + 1) tail
+  in
+  loop 0 choices
+
+let filter_choices filter choices =
+  let filters = Filter_lexer.items [] (Lexing.from_string filter) in
+  let matches choice filter =
+    (* TODO: case-sensitive match if filter has capital letters *)
+    let choice = String.lowercase_ascii choice in
+    let filter = String.lowercase_ascii filter in
+    let choice_length = String.length choice in
+    let filter_length = String.length filter in
+    let rec loop start =
+      if start + filter_length > choice_length then
+        false
+      else if String.sub choice start filter_length = filter then
+        true
+      else
+        loop (start + 1)
+    in
+    loop 0
+  in
+  List.filter (fun choice -> List.for_all (matches choice) filters) choices
+
 let render focused_panel (frame: Render.frame) panel ~x ~y ~w ~h =
   let has_focus = panel == focused_panel in
   let view = panel.view in
-  match panel.kind with
+  match panel.view.kind with
     | File ->
         let cursor_style =
           if has_focus then
@@ -146,20 +190,10 @@ let render focused_panel (frame: Render.frame) panel ~x ~y ~w ~h =
         render_file_status_bar has_focus frame view ~x ~y: (y + h - 1) ~w
 
     | Prompt { prompt } ->
-        let prompt_length = String.length prompt in (* We assume unicode here for now. *)
+        render_prompt has_focus frame view prompt ~x ~y ~w
 
-        (* Render prompt. *)
-        let style =
-          if has_focus then
-            Render.style ~bg_color: Cyan ~fg_color: Black ()
-          else
-            Render.style ~bg_color: White ~fg_color: Black ()
-        in
-        Render.text ~style frame x y (min w prompt_length) prompt;
-
-        (* Render prompt input area. *)
-        render_view
-          ~style
-          ~cursor_style: (Render.style ~fg_color: Black ~bg_color: Yellow ())
-          ~selection_style: (Render.style ~fg_color: Black ~bg_color: White ())
-          frame view ~x: (x + prompt_length) ~y ~w: (w - prompt_length) ~h
+    | List_choice { prompt; choices; choice } ->
+        let filter = Text.to_string view.file.text in
+        let choices = filter_choices filter choices in
+        render_choice_list frame choices choice ~x ~y ~w ~h: (h - 1);
+        render_prompt has_focus frame view prompt ~x ~y: (y + h - 1) ~w

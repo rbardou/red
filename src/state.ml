@@ -7,6 +7,7 @@ type t =
     mutable global_bindings: (t -> unit) Key.Map.t;
     mutable file_bindings: (t -> unit) Key.Map.t;
     mutable prompt_bindings: (t -> unit) Key.Map.t;
+    mutable list_choice_bindings: (t -> unit) Key.Map.t;
 
     (* Files to check for modification before exiting.
        Also files that should not be reopened (reuse them instead). *)
@@ -29,6 +30,7 @@ let create ?focus layout =
     global_bindings = Key.Map.empty;
     file_bindings = Key.Map.empty;
     prompt_bindings = Key.Map.empty;
+    list_choice_bindings = Key.Map.empty;
     clipboard = { text = Text.empty };
     files = [];
   }
@@ -44,9 +46,10 @@ let abort ?exn x = Printf.ksprintf (abort ?exn) x
 
 let on_key_press state (key: Key.t) =
   let local_bindings =
-    match state.focus.kind with
+    match state.focus.view.kind with
       | File -> state.file_bindings
       | Prompt _ -> state.prompt_bindings
+      | List_choice _ -> state.list_choice_bindings
   in
   let catch f x =
     try
@@ -104,10 +107,10 @@ let remove_panel panel state =
 
 let set_focus state focus =
   (
-    match state.focus.kind with
+    match state.focus.view.kind with
       | Prompt _ ->
           remove_panel state.focus state
-      | File ->
+      | File | List_choice _ ->
           ()
   );
   state.focus <- focus

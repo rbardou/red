@@ -9,6 +9,7 @@ type context =
   | Global
   | File
   | Prompt
+  | List_choice
 
 let bind context (state: State.t) key name =
   let command =
@@ -23,6 +24,7 @@ let bind context (state: State.t) key name =
     | Global -> state.global_bindings <- Key.Map.add key command state.global_bindings
     | File -> state.file_bindings <- Key.Map.add key command state.file_bindings
     | Prompt -> state.prompt_bindings <- Key.Map.add key command state.prompt_bindings
+    | List_choice -> state.list_choice_bindings <- Key.Map.add key command state.list_choice_bindings
 
 (******************************************************************************)
 (*                                   Helpers                                  *)
@@ -261,14 +263,14 @@ let prompt ?(global = false) ?(default = "") (prompt: string) (state: State.t) (
   (* Create prompt panel. *)
   let prompt_panel =
     let initial_focus = state.focus in
-    let file = File.create prompt (Text.one_line (Line.of_utf8_string default)) in
-    let view = File.create_view file in
-    select_all view;
-    let validate text =
+    let validate string =
       if global && Layout.panel_is_visible initial_focus state.layout then State.set_focus state initial_focus;
-      validate (Text.to_string text)
+      validate string
     in
-    Panel.create (Prompt { prompt; validate }) view
+    let file = File.create prompt (Text.one_line (Line.of_utf8_string default)) in
+    let view = File.create_view (Prompt { prompt; validate }) file in
+    select_all view;
+    Panel.create view
   in
 
   (* Add panel to layout and focus it. *)
@@ -301,6 +303,22 @@ let rec prompt_confirmation ?global ?(repeated = false) message state confirm =
     ()
   else
     prompt_confirmation ?global ~repeated: true message state confirm
+
+let choose_from_list ?(default = "") (prompt: string) (choices: string list) (state: State.t)
+    (validate: string -> unit) =
+  (* Create choice file and view. *)
+  let choice_view =
+    let file = File.create prompt (Text.one_line (Line.of_utf8_string default)) in
+    let view =
+      let original_view = state.focus.view in
+      File.create_view (List_choice { prompt; validate; choices; choice = 0; original_view }) file
+    in
+    select_all view;
+    view
+  in
+
+  (* Replace current view with choice view. *)
+  state.focus.view <- choice_view
 
 (******************************************************************************)
 (*                                 Definitions                                *)
@@ -339,14 +357,14 @@ let () = define "open" @@ fun state ->
   if filename <> "" then (
     if not (System.file_exists filename) then abort "file does not exist: %S" filename;
     let file = State.create_file_loading state filename in
-    let view = File.create_view file in
+    let view = File.create_view File file in
     panel.view <- view
   )
 
 let () = define "new" @@ fun state ->
   let panel = state.focus in
   let file = State.create_file state "(new file)" Text.empty in
-  let view = File.create_view file in
+  let view = File.create_view File file in
   panel.view <- view
 
 let () = define "remove_panel" @@ fun state -> State.remove_panel state.focus state
@@ -502,10 +520,20 @@ let () = define "redo" @@ fun state -> File.redo state.focus.view.file
 
 let () = define "validate" @@ fun state ->
   let panel = state.focus in
-  match panel.kind with
+  match panel.view.kind with
     | Prompt { validate } ->
         State.remove_panel panel state;
-        validate panel.view.file.text
+        validate (Text.to_string panel.view.file.text)
+    | List_choice { validate; original_view; choice; choices } ->
+        let filter = Text.to_string panel.view.file.text in
+        panel.view <- original_view;
+        (
+          match List.nth (Panel.filter_choices filter choices) choice with
+            | exception Failure _ ->
+                validate filter
+            | choice ->
+                validate choice
+        )
     | _ ->
         abort "focused panel is not a prompt"
 
@@ -527,5 +555,47 @@ let () = define "execute_process" @@ fun state ->
         ()
     | program :: arguments ->
         let file = State.create_file state ("<" ^ command ^ ">") Text.empty in
-        panel.view <- File.create_view file;
+        panel.view <- File.create_view File file;
         File.create_process file program arguments
+
+let () = define "switch_file" @@ fun state ->
+  let panel = state.focus in
+  let compare_names a b =
+    (* By using uppercase instead of lowercase, symbols like _ are higher in the choice list. *)
+    String.compare (String.uppercase_ascii a) (String.uppercase_ascii b)
+  in
+  let names = List.sort compare_names (List.map File.get_name state.files) in
+  choose_from_list "Switch to file: " names state @@ fun choice ->
+  match List.find (File.has_name choice) state.files with
+    | exception Not_found ->
+        abort "no such file: %s" choice
+    | file ->
+        (* TODO: use previous view that this panel had *)
+        let view =
+          match file.views with
+            | [] ->
+                File.create_view File file
+            | head :: _ ->
+                head
+        in
+        panel.view <- view
+
+let () = define "choose_next" @@ fun state ->
+  match state.focus.view.kind with
+    | List_choice choice ->
+        let choices = Panel.filter_choices (Text.to_string state.focus.view.file.text) choice.choices in
+        choice.choice <- choice.choice + 1;
+        let max_choice = List.length choices - 1 in
+        if choice.choice > max_choice then choice.choice <- 0
+    | _ ->
+        abort "focused panel is not a prompt"
+
+let () = define "choose_previous" @@ fun state ->
+  match state.focus.view.kind with
+    | List_choice choice ->
+        let choices = Panel.filter_choices (Text.to_string state.focus.view.file.text) choice.choices in
+        choice.choice <- choice.choice - 1;
+        if choice.choice < 0 then choice.choice <- List.length choices - 1;
+        if choice.choice < 0 then choice.choice <- 0
+    | _ ->
+        abort "focused panel is not a prompt"

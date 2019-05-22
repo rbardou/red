@@ -99,6 +99,7 @@ let main () =
   Ctrl_s => "save";
   Alt_ctrl_s => "save_as";
   Ctrl_o => "open";
+  F2 => "switch_file"; (* TODO: merge with Ctrl+O? *)
   Ctrl_n => "new";
   Alt_letter_x => "execute_command";
   Alt_ctrl_x => "execute_process";
@@ -106,6 +107,13 @@ let main () =
   (* Prompt Bindings *)
   let (=>) = Command.bind Prompt state in
 
+  Return => "validate";
+
+  (* List choice Bindings *)
+  let (=>) = Command.bind List_choice state in
+
+  Up => "choose_next";
+  Down => "choose_previous";
   Return => "validate";
 
   Term_run.run_raw_mode

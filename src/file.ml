@@ -36,6 +36,12 @@ type loading =
   | File of { loaded: int; size: int; sub_strings_rev: (string * int) list }
   | Process of string
 
+type prompt =
+  {
+    prompt: string;
+    validate: string -> unit;
+  }
+
 type t =
   {
     mutable views: view list;
@@ -59,6 +65,7 @@ type t =
 
 and view =
   {
+    kind: view_kind;
     file: t;
     mutable scroll_x: int;
     mutable scroll_y: int;
@@ -89,6 +96,26 @@ and undo_mark =
     undo_x: int;
     undo_y: int;
   }
+
+and choice =
+  {
+    prompt: string;
+    validate: string -> unit;
+    choices: string list;
+    mutable choice: int; (* among choices that match the filter *)
+    original_view: view;
+  }
+
+and view_kind =
+  | File
+  | Prompt of prompt
+  | List_choice of choice
+
+let get_name file =
+  file.name
+
+let has_name name file =
+  file.name = name
 
 let foreach_view file f =
   List.iter f file.views
@@ -319,10 +346,11 @@ let create_cursor x y =
     clipboard = { text = Text.empty };
   }
 
-let create_view file =
+let create_view kind file =
   let cursor = create_cursor 0 0 in
   let view =
     {
+      kind;
       file;
       scroll_x = 0;
       scroll_y = 0;
@@ -621,6 +649,13 @@ let edit save_undo file f =
     else
       f ();
     reset_preferred_x file;
+
+    foreach_view file @@ fun view ->
+    match view.kind with
+      | List_choice choice ->
+          choice.choice <- 0
+      | _ ->
+          ()
   )
 
 let replace_selection_by_character character view =
