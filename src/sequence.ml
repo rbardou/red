@@ -43,6 +43,15 @@ let rec pretty pretty_value fmt sequence =
 
 let empty = Leaf
 
+let is_empty sequence =
+  match sequence with
+    | Leaf -> true
+    | Double_black_leaf -> true
+    | Node (_, count, _, _, _) -> false
+
+let is_not_empty sequence =
+  not (is_empty sequence)
+
 let count sequence =
   match sequence with
     | Leaf -> 0

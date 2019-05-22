@@ -6,6 +6,12 @@ type t
 (** A line with no characters. *)
 val empty: t
 
+(** Return whether a line is empty. *)
+val is_empty: t -> bool
+
+(** Return whether a line is not empty. *)
+val is_not_empty: t -> bool
+
 (** Make a line with one character. *)
 val one: Character.t -> t
 

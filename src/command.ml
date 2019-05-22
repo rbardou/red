@@ -51,26 +51,83 @@ let recenter_if_needed (state: State.t) =
   if cursor.position.y < view.scroll_y || cursor.position.y >= view.scroll_y + view.height - 1 then
     recenter_y view cursor
 
+let rec find_character_forwards text x y f =
+  if y >= Text.get_line_count text then
+    None
+  else
+    match Text.get x y text with
+      | None ->
+          if f "\n" then
+            Some (x, y)
+          else
+            find_character_forwards text 0 (y + 1) f
+      | Some character ->
+          if f character then
+            Some (x, y)
+          else
+            find_character_forwards text (x + 1) y f
+
+let rec find_character_backwards text x y f =
+  if y < 0 then
+    None
+  else if x < 0 then
+    find_character_backwards text (Text.get_line_length (y - 1) text) (y - 1) f
+  else
+    match Text.get x y text with
+      | None ->
+          if f "\n" then
+            Some (x, y)
+          else
+            find_character_backwards text (x - 1) y f
+      | Some character ->
+          if f character then
+            Some (x, y)
+          else
+            find_character_backwards text (x - 1) y f
+
+let rec find_line_forwards text y f =
+  if y >= Text.get_line_count text then
+    None
+  else
+    if f (Text.get_line y text) then
+      Some y
+    else
+      find_line_forwards text (y + 1) f
+
+let rec find_line_backwards text y f =
+  if y < 0 then
+    None
+  else
+    if f (Text.get_line y text) then
+      Some y
+    else
+      find_line_backwards text (y - 1) f
+
+(* Change cursor position (apply [f] to get new coordinates).
+   Update [preferred_x] unless [vertical].
+   Reset selection if [reset_selection]. *)
+let move_cursor reset_selection vertical (view: File.view) (cursor: File.cursor) f =
+  let position = cursor.position in
+  let x, y = f view.file.text (if vertical then cursor.preferred_x else position.x) position.y in
+  if reset_selection then (
+    let selection_start = cursor.selection_start in
+    selection_start.x <- x;
+    selection_start.y <- y;
+  );
+  position.x <- x;
+  position.y <- y;
+  cursor.preferred_x <- if vertical then cursor.preferred_x else x
+
 (* Change cursor position (apply [f] to get new coordinates).
    Update [preferred_x] unless [vertical].
    Reset selection if [reset_selection]. *)
 let move reset_selection vertical f (state: State.t) =
   let view = state.focus.view in
-  let text = view.file.text in
-  let move (cursor: File.cursor) =
-    let position = cursor.position in
-    let x, y = f text (if vertical then cursor.preferred_x else position.x) position.y in
-    if reset_selection then (
-      let selection_start = cursor.selection_start in
-      selection_start.x <- x;
-      selection_start.y <- y;
-    );
-    position.x <- x;
-    position.y <- y;
-    cursor.preferred_x <- if vertical then cursor.preferred_x else x;
-  in
   view.auto_scroll_to_bottom <- false;
-  File.foreach_cursor view move;
+  (
+    File.foreach_cursor view @@ fun cursor ->
+    move_cursor reset_selection vertical view cursor f
+  );
   recenter_if_needed state
 
 let move_right text x y =
@@ -115,6 +172,53 @@ let move_end_of_file text _ _ =
 
 let move_beginning_of_file text _ _ =
   0, 0
+
+let move_right_word text x y =
+  match find_character_forwards text x y Character.is_word_character with
+    | None ->
+        move_end_of_file text x y
+    | Some (x, y) ->
+        match find_character_forwards text x y Character.is_not_word_character with
+          | None ->
+              move_end_of_file text x y
+          | Some (x, y) ->
+              x, y
+
+let move_left_word text x y =
+  (* Move left once to avoid staying at the same place if we are already at the beginning of a word. *)
+  let x, y = move_left text x y in
+  match find_character_backwards text x y Character.is_word_character with
+    | None ->
+        0, 0
+    | Some (x, y) ->
+        match find_character_backwards text x y Character.is_not_word_character with
+          | None ->
+              0, 0
+          | Some (x, y) ->
+              (* We are at just before the word, go right once to be at the beginning of the word. *)
+              move_right text x y
+
+let move_down_paragraph text x y =
+  match find_line_forwards text y Line.is_not_empty with
+    | None ->
+        move_end_of_file text x y
+    | Some y ->
+        match find_line_forwards text y Line.is_empty with
+          | None ->
+              move_end_of_file text x y
+          | Some y ->
+              0, y
+
+let move_up_paragraph text x y =
+  match find_line_backwards text y Line.is_not_empty with
+    | None ->
+        0, 0
+    | Some y ->
+        match find_line_backwards text y Line.is_empty with
+          | None ->
+              0, 0
+          | Some y ->
+              0, y
 
 let focus_relative get (state: State.t) =
   match get state.focus state.layout with
@@ -278,6 +382,10 @@ let () = define "move_end_of_line" @@ move true false move_end_of_line
 let () = define "move_beginning_of_line" @@ move true false move_beginning_of_line
 let () = define "move_end_of_file" @@ move true false move_end_of_file
 let () = define "move_beginning_of_file" @@ move true false move_beginning_of_file
+let () = define "move_right_word" @@ move true false move_right_word
+let () = define "move_left_word" @@ move true false move_left_word
+let () = define "move_down_paragraph" @@ move true false move_down_paragraph
+let () = define "move_up_paragraph" @@ move true false move_up_paragraph
 
 let () = define "select_right" @@ move false false move_right
 let () = define "select_left" @@ move false false move_left
@@ -287,6 +395,10 @@ let () = define "select_end_of_line" @@ move false false move_end_of_line
 let () = define "select_beginning_of_line" @@ move false false move_beginning_of_line
 let () = define "select_end_of_file" @@ move false false move_end_of_file
 let () = define "select_beginning_of_file" @@ move false false move_beginning_of_file
+let () = define "select_right_word" @@ move false false move_right_word
+let () = define "select_left_word" @@ move false false move_left_word
+let () = define "select_down_paragraph" @@ move false false move_down_paragraph
+let () = define "select_up_paragraph" @@ move false false move_up_paragraph
 
 let () = define "select_all" @@ fun state ->
   select_all state.focus.view

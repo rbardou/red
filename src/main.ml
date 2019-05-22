@@ -50,6 +50,10 @@ let main () =
   Home => "move_beginning_of_line";
   Ctrl_end => "move_end_of_file";
   Ctrl_home => "move_beginning_of_file";
+  Ctrl_right => "move_right_word";
+  Ctrl_left => "move_left_word";
+  Ctrl_down => "move_down_paragraph";
+  Ctrl_up => "move_up_paragraph";
 
   Ctrl_a => "select_all";
   Shift_right => "select_right";
@@ -60,6 +64,10 @@ let main () =
   Shift_home => "select_beginning_of_line";
   Ctrl_shift_end => "select_end_of_file";
   Ctrl_shift_home => "select_beginning_of_file";
+  Ctrl_shift_right => "select_right_word";
+  Ctrl_shift_left => "select_left_word";
+  Ctrl_shift_down => "select_down_paragraph";
+  Ctrl_shift_up => "select_up_paragraph";
 
   Alt_right => "focus_right";
   Alt_left => "focus_left";

@@ -2,6 +2,10 @@ type t = Character.t Sequence.t
 
 let empty = Sequence.empty
 
+let is_empty = Sequence.is_empty
+
+let is_not_empty = Sequence.is_not_empty
+
 let one = Sequence.one
 
 let of_list text = Sequence.of_list text

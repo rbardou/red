@@ -14,6 +14,12 @@ val pretty: (Format.formatter -> 'a -> unit) -> Format.formatter -> 'a t -> unit
 (** The empty sequence. *)
 val empty: 'a t
 
+(** Return whether a sequence is empty. *)
+val is_empty: 'a t -> bool
+
+(** Negation of [is_empty]. *)
+val is_not_empty: 'a t -> bool
+
 (** Return the size of a sequence. *)
 val count: 'a t -> int
 

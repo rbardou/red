@@ -31,6 +31,11 @@ val of_utf8_substrings_offset_0: (string * int) list -> t
     Both [x] and [y] start at [0]. *)
 val get: int -> int -> t -> Character.t option
 
+(** Get a line given its index.
+
+    Return the empty line if line does not exist. *)
+val get_line: int -> t -> Line.t
+
 (** Get the number of lines in a text.
 
     Usage: [get_line_count y text] *)
