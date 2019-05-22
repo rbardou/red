@@ -96,3 +96,13 @@ let is_directory filename =
 
 let get_cwd () =
   Sys.getcwd ()
+
+(* TODO: other OSes *)
+let is_root_directory filename =
+  filename = Filename.dir_sep
+
+let make_filename_absolute filename =
+  if Filename.is_relative filename then
+    Filename.concat (get_cwd ()) filename
+  else
+    filename

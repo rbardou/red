@@ -653,7 +653,7 @@ let edit save_undo file f =
     foreach_view file @@ fun view ->
     match view.kind with
       | List_choice choice ->
-          choice.choice <- 0
+          choice.choice <- -1
       | _ ->
           ()
   )

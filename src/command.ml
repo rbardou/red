@@ -304,14 +304,14 @@ let rec prompt_confirmation ?global ?(repeated = false) message state confirm =
   else
     prompt_confirmation ?global ~repeated: true message state confirm
 
-let choose_from_list ?(default = "") (prompt: string) (choices: string list) (state: State.t)
+let choose_from_list ?(default = "") ?(choice = -1) (prompt: string) (choices: string list) (state: State.t)
     (validate: string -> unit) =
   (* Create choice file and view. *)
   let choice_view =
     let file = File.create prompt (Text.one_line (Line.of_utf8_string default)) in
     let view =
       let original_view = state.focus.view in
-      File.create_view (List_choice { prompt; validate; choices; choice = 0; original_view }) file
+      File.create_view (List_choice { prompt; validate; choices; choice; original_view }) file
     in
     select_all view;
     view
@@ -326,6 +326,84 @@ let sort_names list =
     String.compare (String.uppercase_ascii a) (String.uppercase_ascii b)
   in
   List.sort compare_names list
+
+let choose_from_file_system ?default (prompt: string) (state: State.t) (validate: string -> unit) =
+  let append_dir_sep_if_needed filename =
+    let length = String.length filename in
+    let sep_length = String.length Filename.dir_sep in
+    if
+      length < sep_length ||
+      String.sub filename (length - sep_length) sep_length <> Filename.dir_sep
+    then
+      filename ^ Filename.dir_sep
+    else
+      filename
+  in
+
+  let starting_directory, default =
+    match default with
+      | None ->
+          System.get_cwd (), None
+      | Some default ->
+          let base = Filename.basename default in
+          let base =
+            if
+              base = Filename.current_dir_name ||
+              System.is_root_directory base
+            then
+              None
+            else
+              Some base
+          in
+          let dir =
+            let dir = Filename.dirname default in
+            if dir = Filename.current_dir_name then
+              System.get_cwd ()
+            else
+              System.make_filename_absolute dir
+          in
+          dir, base
+  in
+  let starting_directory = append_dir_sep_if_needed starting_directory in
+
+  let rec browse ?default directory =
+    let names =
+      let append_dir_sep_if_directory filename =
+        if System.is_directory (Filename.concat directory filename) then
+          filename ^ Filename.dir_sep
+        else
+          filename
+      in
+      (* TODO: sort to show directories separately, and display them in another color *)
+      append_dir_sep_if_needed Filename.parent_dir_name :: (
+        System.ls directory
+        |> sort_names
+        |> List.map append_dir_sep_if_directory
+      )
+    in
+    let choice =
+      match default with
+        | None ->
+            (* The filter starts empty. Let's select the parent directory by default. *)
+            Some 0
+        | Some _ ->
+            None
+    in
+    choose_from_list ?default ?choice (prompt ^ directory) names state @@ fun choice ->
+    if choice = "" then
+      ()
+    else if choice = Filename.current_dir_name then
+      browse directory
+    else if choice = Filename.parent_dir_name || choice = append_dir_sep_if_needed Filename.parent_dir_name then
+      browse (append_dir_sep_if_needed (Filename.dirname directory))
+    else
+      let filename = Filename.concat directory choice in
+      if System.is_directory filename then
+        browse filename
+      else
+        validate filename
+  in
+  browse ?default (append_dir_sep_if_needed starting_directory)
 
 (******************************************************************************)
 (*                                 Definitions                                *)
@@ -350,61 +428,21 @@ let () = define "save" @@ fun state ->
   let file_to_save = state.focus.view.file in
   match file_to_save.filename with
     | None ->
-        prompt ?default: file_to_save.filename "Save as: " state (save file_to_save)
+        choose_from_file_system "Save as: " state (save file_to_save)
     | Some filename ->
         save file_to_save filename
 
 let () = define "save_as" @@ fun state ->
   let file_to_save = state.focus.view.file in
-  prompt ?default: file_to_save.filename "Save as: " state (save file_to_save)
+  choose_from_file_system ?default: file_to_save.filename "Save as: " state (save file_to_save)
 
 let () = define "open" @@ fun state ->
   let panel = state.focus in
-  let append_dir_sep_if_needed filename =
-    let length = String.length filename in
-    let sep_length = String.length Filename.dir_sep in
-    if
-      length < sep_length ||
-      String.sub filename (length - sep_length) sep_length <> Filename.dir_sep
-    then
-      filename ^ Filename.dir_sep
-    else
-      filename
-  in
-  let rec browse directory =
-    let names =
-      let append_dir_sep_if_directory filename =
-        if System.is_directory (Filename.concat directory filename) then
-          filename ^ Filename.dir_sep
-        else
-          filename
-      in
-      (* TODO: sort to show directories separately, and display them in another color *)
-      append_dir_sep_if_needed Filename.parent_dir_name :: (
-        System.ls directory
-        |> sort_names
-        |> List.map append_dir_sep_if_directory
-      )
-    in
-    choose_from_list ("Open: " ^ directory) names state @@ fun choice ->
-    if choice = "" then
-      ()
-    else if choice = Filename.current_dir_name then
-      browse directory
-    else if choice = Filename.parent_dir_name || choice = append_dir_sep_if_needed Filename.parent_dir_name then
-      browse (append_dir_sep_if_needed (Filename.dirname directory))
-    else
-      let filename = Filename.concat directory choice in
-      if System.is_directory filename then
-        browse filename
-      else (
-        if not (System.file_exists filename) then abort "file does not exist: %S" filename;
-        let file = State.create_file_loading state filename in
-        let view = File.create_view File file in
-        panel.view <- view
-      )
-  in
-  browse (append_dir_sep_if_needed (System.get_cwd ()))
+  choose_from_file_system "Open: " state @@ fun filename ->
+  if not (System.file_exists filename) then abort "file does not exist: %S" filename;
+  let file = State.create_file_loading state filename in
+  let view = File.create_view File file in
+  panel.view <- view
 
 let () = define "new" @@ fun state ->
   let panel = state.focus in
@@ -574,7 +612,7 @@ let () = define "validate" @@ fun state ->
         panel.view <- original_view;
         (
           match List.nth (Panel.filter_choices filter choices) choice with
-            | exception Failure _ ->
+            | exception (Invalid_argument _ | Failure _) ->
                 validate filter
             | choice ->
                 validate choice
@@ -606,7 +644,7 @@ let () = define "execute_process" @@ fun state ->
 let () = define "switch_file" @@ fun state ->
   let panel = state.focus in
   let names = sort_names (List.map File.get_name state.files) in
-  choose_from_list "Switch to file: " names state @@ fun choice ->
+  choose_from_list ~choice: 0 "Switch to file: " names state @@ fun choice ->
   match List.find (File.has_name choice) state.files with
     | exception Not_found ->
         abort "no such file: %s" choice
@@ -635,6 +673,6 @@ let () = define "choose_previous" @@ fun state ->
   match state.focus.view.kind with
     | List_choice choice ->
         choice.choice <- choice.choice - 1;
-        if choice.choice < 0 then choice.choice <- 0
+        if choice.choice < -1 then choice.choice <- -1
     | _ ->
         abort "focused panel is not a prompt"
