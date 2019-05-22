@@ -37,25 +37,7 @@ let render_view
   let file = view.file in
   let text = file.text in
   let scroll_x = view.scroll_x in
-  let scroll_y =
-    if view.auto_scroll_to_bottom then
-      (* Get last line index (minus one if empty). *)
-      let last_line = Text.get_line_count text in
-      let last_line =
-        if Text.get_line_length last_line text = 0 then
-          max 0 (last_line - 1)
-        else
-          last_line
-      in
-
-      (* Unless everything already fits, scroll. *)
-      if last_line + 1 > h then
-        last_line - h
-      else
-        0
-    else
-      view.scroll_y
-  in
+  let scroll_y = view.scroll_y in
   let cursors = view.cursors in
 
   (* Return true whether a given position is the position of a cursor. *)

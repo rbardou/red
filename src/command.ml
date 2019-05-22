@@ -30,27 +30,6 @@ let bind context (state: State.t) key name =
 
 let abort ?exn x = State.abort ?exn x
 
-let recenter_y (view: File.view) (cursor: File.cursor) =
-  view.scroll_y <- max 0 (cursor.position.y - view.height / 2)
-
-let recenter_x (view: File.view) (cursor: File.cursor) =
-  view.scroll_x <- max 0 (cursor.position.x - view.width / 2)
-
-let if_only_one_cursor (view: File.view) f =
-  match view.cursors with
-    | [ cursor ] ->
-        f cursor
-    | _ ->
-        ()
-
-let recenter_if_needed (state: State.t) =
-  let view = state.focus.view in
-  if_only_one_cursor view @@ fun cursor ->
-  if cursor.position.x < view.scroll_x || cursor.position.x >= view.scroll_x + view.width - 1 then
-    recenter_x view cursor;
-  if cursor.position.y < view.scroll_y || cursor.position.y >= view.scroll_y + view.height - 1 then
-    recenter_y view cursor
-
 let rec find_character_forwards text x y f =
   if y >= Text.get_line_count text then
     None
@@ -123,12 +102,11 @@ let move_cursor reset_selection vertical (view: File.view) (cursor: File.cursor)
    Reset selection if [reset_selection]. *)
 let move reset_selection vertical f (state: State.t) =
   let view = state.focus.view in
-  view.auto_scroll_to_bottom <- false;
   (
     File.foreach_cursor view @@ fun cursor ->
     move_cursor reset_selection vertical view cursor f
   );
-  recenter_if_needed state
+  File.recenter_if_needed view
 
 let move_right text x y =
   if x >= Text.get_line_length y text then
@@ -231,8 +209,7 @@ let move_after_scroll (view: File.view) old_scroll =
   let delta = view.scroll_y - old_scroll in
   let text = view.file.text in
   let max_y = Text.get_line_count text - 1 in
-  if_only_one_cursor view @@ fun cursor ->
-  view.auto_scroll_to_bottom <- false;
+  File.if_only_one_cursor view @@ fun cursor ->
   cursor.position.y <- max 0 (min max_y (cursor.position.y + delta));
   cursor.position.x <- min (Text.get_line_length cursor.position.y text) cursor.preferred_x;
   cursor.selection_start.x <- cursor.position.x;
@@ -435,20 +412,24 @@ let () = define "scroll_up" @@ fun state ->
   move_after_scroll view old_scroll
 
 let () = define "insert_new_line" @@ fun state ->
-  File.replace_selection_by_new_line state.focus.view;
-  recenter_if_needed state
+  let view = state.focus.view in
+  File.replace_selection_by_new_line view;
+  File.recenter_if_needed view
 
 let () = define "delete_character" @@ fun state ->
-  File.delete_selection_or_character state.focus.view;
-  recenter_if_needed state
+  let view = state.focus.view in
+  File.delete_selection_or_character view;
+  File.recenter_if_needed view
 
 let () = define "delete_character_backwards" @@ fun state ->
-  File.delete_selection_or_character_backwards state.focus.view;
-  recenter_if_needed state
+  let view = state.focus.view in
+  File.delete_selection_or_character_backwards view;
+  File.recenter_if_needed view
 
 let () = define "delete_end_of_line" @@ fun state ->
+  let view = state.focus.view in
   (
-    File.delete_from_cursors state.focus.view @@ fun text cursor ->
+    File.delete_from_cursors view @@ fun text cursor ->
     (* Cannot just use [move_end_of_line] here because we want to delete the \n if we are at the end of the line. *)
     let x = cursor.position.x in
     let y = cursor.position.y in
@@ -458,21 +439,23 @@ let () = define "delete_end_of_line" @@ fun state ->
     else
       length, y
   );
-  recenter_if_needed state
+  File.recenter_if_needed view
 
 let () = define "delete_end_of_word" @@ fun state ->
+  let view = state.focus.view in
   (
-    File.delete_from_cursors state.focus.view @@ fun text cursor ->
+    File.delete_from_cursors view @@ fun text cursor ->
     move_right_word text cursor.position.x cursor.position.y
   );
-  recenter_if_needed state
+  File.recenter_if_needed view
 
 let () = define "delete_beginning_of_word" @@ fun state ->
+  let view = state.focus.view in
   (
-    File.delete_from_cursors state.focus.view @@ fun text cursor ->
+    File.delete_from_cursors view @@ fun text cursor ->
     move_left_word text cursor.position.x cursor.position.y
   );
-  recenter_if_needed state
+  File.recenter_if_needed view
 
 let () = define "create_cursors_from_selection" @@ fun state ->
   let view = state.focus.view in
@@ -503,8 +486,16 @@ let () = define "create_cursors_from_selection" @@ fun state ->
         File.set_cursors view cursors
 
 let () = define "copy" @@ fun state -> File.copy state.clipboard state.focus.view
-let () = define "cut" @@ fun state -> File.cut state.clipboard state.focus.view
-let () = define "paste" @@ fun state -> File.paste state.clipboard state.focus.view
+
+let () = define "cut" @@ fun state ->
+  let view = state.focus.view in
+  File.cut state.clipboard view;
+  File.recenter_if_needed view
+
+let () = define "paste" @@ fun state ->
+  let view = state.focus.view in
+  File.paste state.clipboard view;
+  File.recenter_if_needed view
 
 let () = define "undo" @@ fun state -> File.undo state.focus.view.file
 let () = define "redo" @@ fun state -> File.redo state.focus.view.file
@@ -537,9 +528,4 @@ let () = define "execute_process" @@ fun state ->
     | program :: arguments ->
         let file = State.create_file state ("<" ^ command ^ ">") Text.empty in
         panel.view <- File.create_view file;
-        File.create_process file program arguments;
-        panel.view.auto_scroll_to_bottom <- true
-
-(* TODO: bind? or do it automatically when cursor is on the last line of a process file? *)
-let () = define "toggle_auto_scroll_to_bottom" @@ fun state ->
-  state.focus.view.auto_scroll_to_bottom <- not state.focus.view.auto_scroll_to_bottom
+        File.create_process file program arguments
