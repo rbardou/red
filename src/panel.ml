@@ -86,7 +86,10 @@ let render_file_status_bar has_focus (frame: Render.frame) (view: File.view) ~x 
         | No ->
             ""
         | File { loaded; size } ->
-            Printf.sprintf "(Loading: %d%%)" (loaded * 100 / size)
+            if size = 0 then
+              "(Loading: 100%)"
+            else
+              Printf.sprintf "(Loading: %d%%)" (loaded * 100 / size)
         | Process name ->
             "(Running...)"
     in
