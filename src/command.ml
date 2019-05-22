@@ -320,6 +320,13 @@ let choose_from_list ?(default = "") (prompt: string) (choices: string list) (st
   (* Replace current view with choice view. *)
   state.focus.view <- choice_view
 
+let sort_names list =
+  let compare_names a b =
+    (* By using uppercase instead of lowercase, symbols like _ are higher in the choice list. *)
+    String.compare (String.uppercase_ascii a) (String.uppercase_ascii b)
+  in
+  List.sort compare_names list
+
 (******************************************************************************)
 (*                                 Definitions                                *)
 (******************************************************************************)
@@ -353,13 +360,51 @@ let () = define "save_as" @@ fun state ->
 
 let () = define "open" @@ fun state ->
   let panel = state.focus in
-  prompt "Open file: " state @@ fun filename ->
-  if filename <> "" then (
-    if not (System.file_exists filename) then abort "file does not exist: %S" filename;
-    let file = State.create_file_loading state filename in
-    let view = File.create_view File file in
-    panel.view <- view
-  )
+  let append_dir_sep_if_needed filename =
+    let length = String.length filename in
+    let sep_length = String.length Filename.dir_sep in
+    if
+      length < sep_length ||
+      String.sub filename (length - sep_length) sep_length <> Filename.dir_sep
+    then
+      filename ^ Filename.dir_sep
+    else
+      filename
+  in
+  let rec browse directory =
+    let names =
+      let append_dir_sep_if_directory filename =
+        if System.is_directory (Filename.concat directory filename) then
+          filename ^ Filename.dir_sep
+        else
+          filename
+      in
+      (* TODO: sort to show directories separately, and display them in another color *)
+      append_dir_sep_if_needed Filename.parent_dir_name :: (
+        System.ls directory
+        |> sort_names
+        |> List.map append_dir_sep_if_directory
+      )
+    in
+    choose_from_list ("Open: " ^ directory) names state @@ fun choice ->
+    if choice = "" then
+      ()
+    else if choice = Filename.current_dir_name then
+      browse directory
+    else if choice = Filename.parent_dir_name || choice = append_dir_sep_if_needed Filename.parent_dir_name then
+      browse (append_dir_sep_if_needed (Filename.dirname directory))
+    else
+      let filename = Filename.concat directory choice in
+      if System.is_directory filename then
+        browse filename
+      else (
+        if not (System.file_exists filename) then abort "file does not exist: %S" filename;
+        let file = State.create_file_loading state filename in
+        let view = File.create_view File file in
+        panel.view <- view
+      )
+  in
+  browse (append_dir_sep_if_needed (System.get_cwd ()))
 
 let () = define "new" @@ fun state ->
   let panel = state.focus in
@@ -560,11 +605,7 @@ let () = define "execute_process" @@ fun state ->
 
 let () = define "switch_file" @@ fun state ->
   let panel = state.focus in
-  let compare_names a b =
-    (* By using uppercase instead of lowercase, symbols like _ are higher in the choice list. *)
-    String.compare (String.uppercase_ascii a) (String.uppercase_ascii b)
-  in
-  let names = List.sort compare_names (List.map File.get_name state.files) in
+  let names = sort_names (List.map File.get_name state.files) in
   choose_from_list "Switch to file: " names state @@ fun choice ->
   match List.find (File.has_name choice) state.files with
     | exception Not_found ->
@@ -586,16 +627,14 @@ let () = define "choose_next" @@ fun state ->
         let choices = Panel.filter_choices (Text.to_string state.focus.view.file.text) choice.choices in
         choice.choice <- choice.choice + 1;
         let max_choice = List.length choices - 1 in
-        if choice.choice > max_choice then choice.choice <- 0
+        if choice.choice > max_choice then choice.choice <- max_choice
     | _ ->
         abort "focused panel is not a prompt"
 
 let () = define "choose_previous" @@ fun state ->
   match state.focus.view.kind with
     | List_choice choice ->
-        let choices = Panel.filter_choices (Text.to_string state.focus.view.file.text) choice.choices in
         choice.choice <- choice.choice - 1;
-        if choice.choice < 0 then choice.choice <- List.length choices - 1;
         if choice.choice < 0 then choice.choice <- 0
     | _ ->
         abort "focused panel is not a prompt"

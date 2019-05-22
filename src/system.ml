@@ -77,3 +77,22 @@ let with_open_out ?perm filename f =
                     error ~exn "failed to close %S after writing" filename
                 | () ->
                     result
+
+let ls directory =
+  match Sys.readdir directory with
+    | exception exn ->
+        error ~exn "failed to read directory: %S" directory
+    | filenames ->
+        Array.to_list filenames |> List.filter @@ fun filename ->
+        filename <> Filename.current_dir_name &&
+        filename <> Filename.parent_dir_name
+
+let is_directory filename =
+  match Sys.is_directory filename with
+    | exception Sys_error _ ->
+        false
+    | b ->
+        b
+
+let get_cwd () =
+  Sys.getcwd ()
