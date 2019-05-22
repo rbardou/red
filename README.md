@@ -4,23 +4,38 @@ A command-line text editor in OCaml.
 
 ## Features
 
-This is a hobby project and it just started, so don't expect much.
-
 Basic features that you would expect from any editor:
-- arrow keys, Home and End (movement);
+- arrow keys, Home and End, Ctrl+arrow keys, Ctrl+Home and Ctrl+End (movement);
 - Shift + movement key (selection);
 - Return (insert new line / replace selection with new line);
 - Delete and Backspace (delete selection or next or previous character);
 - Ctrl+C, Ctrl+X, Ctrl+V (copy, cut and paste);
 - Page Up and Page Down (scroll down and up);
 - UTF-8 support;
-- Ctrl+S to save (warning: no backup is created and there is no confirmation
-  prompt yet).
+- Ctrl+N to create a new file;
+- Ctrl+O to open a file;
+- Ctrl+S to save;
+- Alt+Ctrl+S to save as;
+- Ctrl+Z to undo, Ctrl+Y to redo;
+- F2 to switch to another already opened file;
+- Ctrl+K to delete end of line;
+- Ctrl+D to delete one character (same as Delete);
+- Alt+D to delete end of word;
+- Alt+Backspace to delete beginning of word.
+
+Press Alt+Escape to quit.
 
 Advanced features:
 - Alt + `"` to toggle multiple cursor mode (select several lines first to
   create one cursor per line);
-- Alt + arrow keys: select another panel.
+- Alt + arrow keys: select another panel (for now, multiple panels are created
+  if you give several files on the command-line);
+- Alt+X to execute a command from its name (all commands are already bound though);
+- Alt+Ctrl+X to execute an external program.
+
+File selection (when opening or saving) has built-in auto-completion.
+Use Up and Down to select one of the proposed filenames.
+You may specify several filters by separating them with space characters.
 
 ## Install OCaml
 
