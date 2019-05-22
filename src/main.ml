@@ -71,6 +71,7 @@ let main () =
 
   Return => "insert_new_line";
   Delete => "delete_character";
+  Ctrl_d => "delete_character";
   Backspace => "delete_character_backwards";
   Alt_double_quote => "create_cursors_from_selection";
   Ctrl_k => "delete_end_of_line";
