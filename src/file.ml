@@ -613,19 +613,30 @@ let delete_selection_or_character_backwards view =
   else
     delete_selection view cursor
 
-let delete_end_of_line view =
+let delete_from_cursors view get_other_position =
   edit true view.file @@ fun () ->
   foreach_cursor view @@ fun cursor ->
   let text = view.file.text in
-  let x = cursor.position.x in
-  let y = cursor.position.y in
-  let characters, lines =
-    let length = Text.get_line_length y text in
-    if x >= length then
-      0, 1
+
+  (* Get start and end positions in the right order. *)
+  let x, y, x2, y2 =
+    let position = cursor.position in
+    let other_x, other_y = get_other_position text cursor in
+    let other_position = { x = other_x; y = other_y } in
+    if position <=% other_position then
+      position.x, position.y, other_x, other_y
     else
-      length - x, 0
+      other_x, other_y, position.x, position.y
   in
+
+  (* Compute the number of characters and lines to delete from (x, y), knowing that y <= y2. *)
+  let characters, lines =
+    if y = y2 then
+      x2 - x, 0
+    else
+      x2, y2 - y
+  in
+
   set_text view.file (Text.delete_region ~x ~y ~characters ~lines text);
   update_all_marks_after_delete ~x ~y ~characters ~lines view.file.views
 

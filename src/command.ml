@@ -447,7 +447,31 @@ let () = define "delete_character_backwards" @@ fun state ->
   recenter_if_needed state
 
 let () = define "delete_end_of_line" @@ fun state ->
-  File.delete_end_of_line state.focus.view;
+  (
+    File.delete_from_cursors state.focus.view @@ fun text cursor ->
+    (* Cannot just use [move_end_of_line] here because we want to delete the \n if we are at the end of the line. *)
+    let x = cursor.position.x in
+    let y = cursor.position.y in
+    let length = Text.get_line_length y text in
+    if x >= length then
+      0, y + 1
+    else
+      length, y
+  );
+  recenter_if_needed state
+
+let () = define "delete_end_of_word" @@ fun state ->
+  (
+    File.delete_from_cursors state.focus.view @@ fun text cursor ->
+    move_right_word text cursor.position.x cursor.position.y
+  );
+  recenter_if_needed state
+
+let () = define "delete_beginning_of_word" @@ fun state ->
+  (
+    File.delete_from_cursors state.focus.view @@ fun text cursor ->
+    move_left_word text cursor.position.x cursor.position.y
+  );
   recenter_if_needed state
 
 let () = define "create_cursors_from_selection" @@ fun state ->

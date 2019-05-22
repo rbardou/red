@@ -83,6 +83,8 @@ let main () =
   Backspace => "delete_character_backwards";
   Alt_double_quote => "create_cursors_from_selection";
   Ctrl_k => "delete_end_of_line";
+  Alt_letter_d => "delete_end_of_word";
+  Alt_backspace => "delete_beginning_of_word";
 
   Ctrl_c => "copy";
   Ctrl_x => "cut";
