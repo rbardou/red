@@ -15,8 +15,8 @@ let output_channel ch (text: t) =
   in
   Sequence.iter output_line text
 
-let output_file filename (text: t) =
-  System.with_open_out filename @@ fun ch ->
+let output_file ?perm filename (text: t) =
+  System.with_open_out ?perm filename @@ fun ch ->
   output_channel ch text
 
 let to_string (text: t) =

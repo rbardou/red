@@ -50,8 +50,14 @@ let move_file source destination =
   with exn ->
     error ~exn "failed to rename %S into %S" source destination
 
-let with_open_out filename f =
-  match open_out filename with
+let with_open_out ?perm filename f =
+  match
+    match perm with
+      | None ->
+          open_out_bin filename
+      | Some perm ->
+          open_out_gen [ Open_wronly; Open_creat; Open_trunc; Open_binary ] perm filename
+  with
     | exception exn ->
         error ~exn "failed to open %S for writing" filename
     | ch ->

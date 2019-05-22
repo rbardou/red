@@ -12,7 +12,7 @@ val one_line: Line.t -> t
 (** Output to file.
 
     May raise [System.Error]. *)
-val output_file: string -> t -> unit
+val output_file: ?perm: Unix.file_perm -> string -> t -> unit
 
 (** Convert to a string. *)
 val to_string: t -> string

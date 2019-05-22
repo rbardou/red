@@ -155,8 +155,15 @@ let save (file: File.t) filename =
       )
     else
       (
+        let perm =
+          match Unix.stat filename with
+            | exception Unix.Unix_error _ ->
+                None
+            | stat ->
+                Some stat.st_perm
+        in
         let temporary_filename = System.find_temporary_filename filename in
-        Text.output_file temporary_filename file.text;
+        Text.output_file ?perm temporary_filename file.text;
         Log.info "Wrote: %s" temporary_filename;
         System.move_file temporary_filename filename;
         Log.info "Moved to: %s" filename
