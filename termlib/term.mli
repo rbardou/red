@@ -126,3 +126,6 @@ val fg_color: color -> unit
 
 (** Set background color. *)
 val bg_color: color -> unit
+
+(** Convert a color into a string like ["Red"]. *)
+val show_color: color -> string

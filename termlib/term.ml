@@ -781,3 +781,15 @@ let bg_color color =
     | Magenta -> print_string "\027[45m"
     | Cyan -> print_string "\027[46m"
     | White -> print_string "\027[47m"
+
+let show_color color =
+  match color with
+    | Default -> "Default"
+    | Black -> "Black"
+    | Red -> "Red"
+    | Green -> "Green"
+    | Yellow -> "Yellow"
+    | Blue -> "Blue"
+    | Magenta -> "Magenta"
+    | Cyan -> "Cyan"
+    | White -> "White"
