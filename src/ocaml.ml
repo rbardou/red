@@ -63,18 +63,18 @@ struct
       | String_backslash_end -> "String_backslash_end"
       | String_end -> "String_end"
 
-  let other = Render.style ~fg_color: Yellow ()
-  let invalid = Render.style ~bg_color: Red ~fg_color: Black ()
-  let keyword = Render.style ~fg_color: Yellow ~intensity: Bold ()
-  let identifier = Render.default
-  let constructor = Render.style ~intensity: Bold ()
-  let module_ = Render.style ~intensity: Bold ~fg_color: Blue ()
-  let integer = Render.style ~fg_color: Blue ()
-  let float = Render.style ~fg_color: Cyan ()
-  let comment = Render.style ~fg_color: Green ()
-  let char = Render.style ~fg_color: Magenta ()
-  let string = Render.style ~fg_color: Magenta ()
-  let string_escaped = Render.style ~fg_color: Black ~bg_color: Magenta ()
+  let other = Style.make ~fg: Yellow ()
+  let invalid = Style.make ~bg: Red ~fg: Black ()
+  let keyword = Style.bold ~fg: Yellow ()
+  let identifier = Style.default
+  let constructor = Style.bold ()
+  let module_ = Style.bold ~fg: Blue ()
+  let integer = Style.make ~fg: Blue ()
+  let float = Style.make ~fg: Cyan ()
+  let comment = Style.make ~fg: Green ()
+  let char = Style.make ~fg: Magenta ()
+  let string = Style.make ~fg: Magenta ()
+  let string_escaped = Style.make ~fg: Black ~bg: Magenta ()
 
   let style state =
     match state with
@@ -184,8 +184,8 @@ end
 
 let test verbose string =
   let set_style start index (style: Render.style) =
-    Term.fg_color style.fg_color;
-    Term.bg_color style.bg_color;
+    Term.fg_color style.fg;
+    Term.bg_color style.bg;
     Term.intensity style.intensity;
     if style.underline then Term.underline true;
     print_string (String.sub string start (index - start));

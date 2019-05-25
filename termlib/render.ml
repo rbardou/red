@@ -1,53 +1,16 @@
-type style =
-  {
-    intensity: Term.intensity;
-    underline: bool;
-    fg_color: Term.color;
-    bg_color: Term.color;
-  }
-
-let default =
-  {
-    intensity = Normal;
-    underline = false;
-    fg_color = Default;
-    bg_color = Default;
-  }
-
-let revert style =
-  let fg_color =
-    match style.bg_color with
-      | Default -> Term.Black
-      | color -> color
-  in
-  let bg_color =
-    match style.fg_color with
-      | Default -> Term.White
-      | color -> color
-  in
-  { style with fg_color; bg_color }
-
-let style
-    ?(intensity = Term.Normal)
-    ?(underline = false)
-    ?(fg_color = Term.Default)
-    ?(bg_color = Term.Default)
-    () =
-  { intensity; underline; fg_color; bg_color }
-
 type cell =
   {
     character: string;
-    style: style;
+    style: Style.t;
   }
 
 let empty_cell =
   {
     character = " ";
-    style = default;
+    style = Style.default;
   }
 
-let cell ?(style = default) character =
+let cell ?(style = Style.default) character =
   {
     character;
     style;
@@ -96,7 +59,7 @@ let output ?previous_frame frame =
 
   (* Contains [true] if there is no need to set cursor position. *)
   let cursor_ok = ref false in
-  let style = ref default in
+  let style = ref Style.default in
 
   let goto_xy x y =
     if not !cursor_ok then (
@@ -138,11 +101,11 @@ let output ?previous_frame frame =
         if cell_style.underline <> !style.underline then
           Term.underline cell_style.underline;
 
-        if cell_style.fg_color <> !style.fg_color then
-          Term.fg_color cell_style.fg_color;
+        if cell_style.fg <> !style.fg then
+          Term.fg_color cell_style.fg;
 
-        if cell_style.bg_color <> !style.bg_color then
-          Term.bg_color cell_style.bg_color;
+        if cell_style.bg <> !style.bg then
+          Term.bg_color cell_style.bg;
 
         (* Style is now the style of the current cell, save it for next cell. *)
         style := cell_style;

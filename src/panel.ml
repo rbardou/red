@@ -66,15 +66,15 @@ let render_file_status_bar has_focus (frame: Render.frame) (view: File.view) ~x 
   let file = view.file in
   let style =
     if has_focus then
-      Render.style ~bg_color: Cyan ~fg_color: Black ()
+      Style.make ~bg: Cyan ~fg: Black ()
     else
-      Render.style ~bg_color: White ~fg_color: Black ()
+      Style.make ~bg: White ~fg: Black ()
   in
 
   (* Render "Modified" flag. *)
   Render.set frame x y (
     if file.modified then
-      Render.cell ~style: { style with fg_color = Black; bg_color = Red } "*"
+      Render.cell ~style: { style with fg = Black; bg = Red } "*"
     else
       Render.cell ~style " "
   );
@@ -122,17 +122,17 @@ let render_prompt has_focus (frame: Render.frame) view prompt ~x ~y ~w =
   (* Render prompt. *)
   let style =
     if has_focus then
-      Render.style ~bg_color: Cyan ~fg_color: Black ()
+      Style.make ~bg: Cyan ~fg: Black ()
     else
-      Render.style ~bg_color: White ~fg_color: Black ()
+      Style.make ~bg: White ~fg: Black ()
   in
   Render.text ~style frame x y (min w prompt_length) prompt;
 
   (* Render prompt input area. *)
   render_view
     ~style
-    ~cursor_style: (Render.style ~fg_color: Black ~bg_color: Yellow ())
-    ~selection_style: (Render.style ~fg_color: Black ~bg_color: White ())
+    ~cursor_style: (Style.make ~fg: Black ~bg: Yellow ())
+    ~selection_style: (Style.make ~fg: Black ~bg: White ())
     frame view ~x: (x + prompt_length) ~y ~w: (w - prompt_length) ~h: 1
 
 let render_choice_list (frame: Render.frame) choices choice ~x ~y ~w ~h =
@@ -145,9 +145,9 @@ let render_choice_list (frame: Render.frame) choices choice ~x ~y ~w ~h =
         | head :: tail ->
             let style =
               if index = choice then
-                Render.style ~fg_color: Black ~bg_color: White ()
+                Style.make ~fg: Black ~bg: White ()
               else
-                Render.default
+                Style.default
             in
             Render.text ~style frame x y w head;
             loop (index + 1) tail
@@ -181,14 +181,14 @@ let render focused_panel (frame: Render.frame) panel ~x ~y ~w ~h =
     | File ->
         let cursor_style =
           if has_focus then
-            Render.style ~fg_color: Black ~bg_color: Cyan ()
+            Style.make ~fg: Black ~bg: Cyan ()
           else
-            Render.style ~fg_color: Black ~bg_color: Yellow ()
+            Style.make ~fg: Black ~bg: Yellow ()
         in
         render_view
-          ~style: Render.default
+          ~style: Style.default
           ~cursor_style
-          ~selection_style: (Render.style ~fg_color: Black ~bg_color: White ())
+          ~selection_style: (Style.make ~fg: Black ~bg: White ())
           frame view ~x ~y ~w ~h: (h - 1);
         render_file_status_bar has_focus frame view ~x ~y: (y + h - 1) ~w
 

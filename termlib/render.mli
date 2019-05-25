@@ -1,35 +1,10 @@
 (** Output rendering for terminals. *)
 
-(** Style of a cell. *)
-type style =
-  {
-    intensity: Term.intensity;
-    underline: bool;
-    fg_color: Term.color;
-    bg_color: Term.color;
-  }
-
-(** Default style with normal intensity, no underline, default colors. *)
-val default: style
-
-(** Revert foreground and background colors. *)
-val revert: style -> style
-
-(** Make a [style].
-
-    Default values are taken from {!default}. *)
-val style:
-  ?intensity: Term.intensity ->
-  ?underline: bool ->
-  ?fg_color: Term.color ->
-  ?bg_color: Term.color ->
-  unit -> style
-
 (** Cell of a frame. *)
 type cell =
   {
     character: string;
-    style: style;
+    style: Style.t;
   }
 
 (** A cell with default style and character [" "]. *)
@@ -38,7 +13,7 @@ val empty_cell: cell
 (** Make a cell.
 
     Default style is {!default}. *)
-val cell: ?style: style -> string -> cell
+val cell: ?style: Style.t -> string -> cell
 
 (** A frame to render on terminal.
 
@@ -82,8 +57,8 @@ val output: ?previous_frame: frame -> frame -> unit
 
     If text is longer than [width] printable characters, it is truncated.
     If it is smaller, it is extended with spaces. *)
-val text: ?style: style -> frame -> int -> int -> int -> string -> unit
+val text: ?style: Style.t -> frame -> int -> int -> int -> string -> unit
 
 (** Same as [text], but using a format string. *)
-val textf: ?style: style -> frame -> int -> int -> int ->
+val textf: ?style: Style.t -> frame -> int -> int -> int ->
   ('a, unit, string, unit) format4 -> 'a

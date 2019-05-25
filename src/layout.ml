@@ -42,7 +42,7 @@ let split direction ?(pos = Ratio (1, 2)) ?(sep = false) ?(main = First) first s
   }
 
 let line_style =
-  Render.style ~bg_color: White ~fg_color: Black ()
+  Style.make ~bg: White ~fg: Black ()
 
 let horizontal_line_cell =
   Render.cell ~style: line_style "-"
