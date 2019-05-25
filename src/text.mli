@@ -15,7 +15,12 @@ val one_line: Line.t -> t
 val output_file: ?perm: Unix.file_perm -> string -> t -> unit
 
 (** Convert to a string. *)
+(* TODO: rename into to_utf8_string? or to_utf8?
+   or assume UTF8 everywhere and rename of_utf8_string into of_string instead? *)
 val to_string: t -> string
+
+(** Convert from a string. *)
+val of_utf8_string: string -> t
 
 (** Make a text from a list of substrings.
 

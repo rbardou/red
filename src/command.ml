@@ -267,7 +267,7 @@ let prompt ?(global = false) ?(default = "") (prompt: string) (state: State.t) (
       if global && Layout.panel_is_visible initial_focus state.layout then State.set_focus state initial_focus;
       validate string
     in
-    let file = File.create prompt (Text.one_line (Line.of_utf8_string default)) in
+    let file = File.create prompt (Text.of_utf8_string default) in
     let view = File.create_view (Prompt { prompt; validate }) file in
     select_all view;
     Panel.create view
@@ -308,7 +308,7 @@ let choose_from_list ?(default = "") ?(choice = -1) (prompt: string) (choices: s
     (validate: string -> unit) =
   (* Create choice file and view. *)
   let choice_view =
-    let file = File.create prompt (Text.one_line (Line.of_utf8_string default)) in
+    let file = File.create prompt (Text.of_utf8_string default) in
     let view =
       let original_view = state.focus.view in
       File.create_view (List_choice { prompt; validate; choices; choice; original_view }) file

@@ -33,23 +33,7 @@ let to_string (text: t) =
   Sequence.iter add_line text;
   Buffer.contents buf
 
-let of_utf8_substrings_offset_0 substrings =
-  (* Make a single string so that we can call [Utf8.split_runes]. *)
-  let string =
-    let total_size = List.fold_left (fun acc (_, len) -> acc + len) 0 substrings in
-    let bytes = Bytes.create total_size in
-    let rec loop offset substrings =
-      match substrings with
-        | [] ->
-            ()
-        | (string, len) :: tail ->
-            Bytes.blit_string string 0 bytes offset len;
-            loop (offset + len) tail
-    in
-    loop 0 substrings;
-    Bytes.unsafe_to_string bytes
-  in
-
+let of_utf8_string string =
   (* Split characters. *)
   let characters = Utf8.split_runes string in
 
@@ -68,6 +52,23 @@ let of_utf8_substrings_offset_0 substrings =
 
   (* Add last line. *)
   Sequence.of_list (List.rev (Line.of_list (List.rev !line) :: !text))
+
+let of_utf8_substrings_offset_0 substrings =
+  let string =
+    let total_size = List.fold_left (fun acc (_, len) -> acc + len) 0 substrings in
+    let bytes = Bytes.create total_size in
+    let rec loop offset substrings =
+      match substrings with
+        | [] ->
+            ()
+        | (string, len) :: tail ->
+            Bytes.blit_string string 0 bytes offset len;
+            loop (offset + len) tail
+    in
+    loop 0 substrings;
+    Bytes.unsafe_to_string bytes
+  in
+  of_utf8_string string
 
 let get x y (text: t) =
   match Sequence.get y text with
