@@ -21,6 +21,7 @@ let render_view
   view.height <- h;
   let file = view.file in
   let text = file.text in
+  let view_style = view.style in
   let scroll_x = view.scroll_x in
   let scroll_y = view.scroll_y in
   let cursors = view.cursors in
@@ -55,7 +56,9 @@ let render_view
         else if List.exists (File.cursor_is_in_selection text_x text_y) cursors then
           selection_style
         else
-          style
+          match Text.get text_x text_y view_style with
+            | None -> style
+            | Some style -> style
       in
       Render.set frame (x + text_x - scroll_x) (y + text_y - scroll_y) (Render.cell ~style character)
     done;

@@ -69,11 +69,18 @@ val delete_region: x: int -> y: int -> characters: int -> lines: int -> 'a t -> 
 
 (** Get a subpart of a text.
 
-    [(x2, y2)] should be after [(x1, y1)]. *)
+    [(x2, y2)] should be after [(x1, y1)].
+    Both [(x1, y1)] and [(x2, y2)] are included. *)
 val sub: x1: int -> y1: int -> x2: int -> y2: int -> 'a t -> 'a t
+
+(** Same as [sub], but expects [lines] and [characters]. *)
+val sub_region: x: int -> y: int -> characters: int -> lines: int -> 'a t -> 'a t
 
 (** Insert a text inside a text. *)
 val insert_text: x: int -> y: int -> sub: 'a t -> 'a t -> 'a t
 
 (** Append a character (which may in particular be [\n] to create a new line) to a text. *)
 val append_character: Character.t -> Character.t t -> Character.t t
+
+(** Apply a function to all characters. *)
+val map: ('a -> 'b) -> 'a t -> 'b t

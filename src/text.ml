@@ -176,6 +176,15 @@ let sub ~x1 ~y1 ~x2 ~y2 text =
     |> Sequence.prepend first
     |> Sequence.append last
 
+let sub_region ~x ~y ~characters ~lines text =
+  let x2 =
+    if lines = 0 then
+      x + characters - 1
+    else
+      characters - 1
+  in
+  sub ~x1: x ~y1: y ~x2 ~y2: (y + lines) text
+
 let insert_text ~x ~y ~sub text =
   let line = get_line y text in
   let left, right = Line.split x line in
@@ -218,3 +227,6 @@ let append_character character text =
             line
     in
     Sequence.set last_line_index (Line.append character last_line) text
+
+let map f text =
+  Sequence.map (Line.map f) text

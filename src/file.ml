@@ -73,6 +73,7 @@ and view =
     mutable height: int; (* set when rendering *)
     mutable marks: mark list;
     mutable cursors: cursor list;
+    mutable style: Style.t Text.t;
   }
 
 and undo =
@@ -88,6 +89,7 @@ and undo_view =
     undo_scroll_x: int;
     undo_scroll_y: int;
     undo_marks: undo_mark list;
+    undo_style: Style.t Text.t;
   }
 
 and undo_mark =
@@ -277,12 +279,25 @@ let update_marks_after_delete ~x ~y ~characters ~lines marks =
   in
   List.iter move_mark marks
 
-let update_all_marks_after_insert ~x ~y ~characters ~lines views =
-  let update_view view = update_marks_after_insert ~x ~y ~characters ~lines view.marks in
+let update_views_after_insert ~x ~y ~characters ~lines views =
+  let style_sub =
+    match views with
+      | [] ->
+          Text.empty
+      | view :: _ ->
+          Text.map (fun _ -> Style.default) (Text.sub_region ~x ~y ~characters ~lines view.file.text)
+  in
+  let update_view view =
+    update_marks_after_insert ~x ~y ~characters ~lines view.marks;
+    view.style <- Text.insert_text ~x ~y ~sub: style_sub view.style;
+  in
   List.iter update_view views
 
-let update_all_marks_after_delete ~x ~y ~characters ~lines views =
-  let update_view view = update_marks_after_delete ~x ~y ~characters ~lines view.marks in
+let update_views_after_delete ~x ~y ~characters ~lines views =
+  let update_view view =
+    update_marks_after_delete ~x ~y ~characters ~lines view.marks;
+    view.style <- Text.delete_region ~x ~y ~characters ~lines view.style;
+  in
   List.iter update_view views
 
 (* If [file_descr] is in [file.open_file_descriptors], close it. *)
@@ -358,6 +373,7 @@ let create_view kind file =
       height = 40;
       marks = [ cursor.selection_start; cursor.position ];
       cursors = [ cursor ];
+      style = Text.map (fun _ -> Style.default) file.text;
     }
   in
   file.views <- view :: file.views;
@@ -409,7 +425,8 @@ let reset file =
   view.scroll_y <- 0;
   let cursor = create_cursor 0 0 in
   view.marks <- [ cursor.selection_start; cursor.position ];
-  view.cursors <- [ cursor ]
+  view.cursors <- [ cursor ];
+  view.style <- Text.empty
 
 let create_spawn_group file =
   kill_spawn_group file;
@@ -446,6 +463,8 @@ let load file filename =
                Replace it by some kind of iterative parser. *)
             let text = Text.of_utf8_substrings_offset_0 (List.rev sub_strings_rev) in
             file.text <- text;
+            let style = Text.map (fun _ -> Style.default) text in
+            foreach_view file (fun view -> view.style <- style);
             close_file_descriptor file file_descr;
             file.loading <- No
           else
@@ -521,7 +540,7 @@ let create_process file program arguments =
                   parse_bytes utf8_parser (i + 1)
         in
         parse_bytes utf8_parser 0;
-        update_all_marks_after_insert ~x ~y ~characters: !inserted_characters ~lines: !inserted_lines file.views;
+        update_views_after_insert ~x ~y ~characters: !inserted_characters ~lines: !inserted_lines file.views;
         foreach_view file recenter_y_if_needed
       )
   in
@@ -557,6 +576,7 @@ let make_undo file =
       undo_scroll_x = view.scroll_x;
       undo_scroll_y = view.scroll_y;
       undo_marks = List.map make_undo_mark view.marks;
+      undo_style = view.style;
     }
   in
   {
@@ -596,15 +616,15 @@ let delete_selection view cursor =
 
   (* Delete selection. *)
   set_text view.file (Text.delete_region ~x ~y ~characters ~lines view.file.text);
-  update_all_marks_after_delete ~x ~y ~characters ~lines view.file.views
+  update_views_after_delete ~x ~y ~characters ~lines view.file.views
 
 let insert_character (character: Character.t) view cursor =
   set_text view.file (Text.insert cursor.position.x cursor.position.y character view.file.text);
-  update_all_marks_after_insert ~x: cursor.position.x ~y: cursor.position.y ~characters: 1 ~lines: 0 view.file.views
+  update_views_after_insert ~x: cursor.position.x ~y: cursor.position.y ~characters: 1 ~lines: 0 view.file.views
 
 let insert_new_line view cursor =
   set_text view.file (Text.insert_new_line cursor.position.x cursor.position.y view.file.text);
-  update_all_marks_after_insert ~x: cursor.position.x ~y: cursor.position.y ~characters: 0 ~lines: 1 view.file.views
+  update_views_after_insert ~x: cursor.position.x ~y: cursor.position.y ~characters: 0 ~lines: 1 view.file.views
 
 let delete_character view cursor =
   let { x; y } = cursor.position in
@@ -612,7 +632,7 @@ let delete_character view cursor =
   let length = Text.get_line_length y text in
   let characters, lines = if x < length then 1, 0 else 0, 1 in
   set_text view.file (Text.delete_region ~x ~y ~characters ~lines text);
-  update_all_marks_after_delete ~x ~y ~characters ~lines view.file.views
+  update_views_after_delete ~x ~y ~characters ~lines view.file.views
 
 let delete_character_backwards view cursor =
   let { x; y } = cursor.position in
@@ -622,7 +642,7 @@ let delete_character_backwards view cursor =
     let characters = 1 in
     let lines = 0 in
     set_text view.file (Text.delete_region ~x ~y ~characters ~lines text);
-    update_all_marks_after_delete ~x ~y ~characters ~lines view.file.views
+    update_views_after_delete ~x ~y ~characters ~lines view.file.views
   else if y > 0 then
     let text = view.file.text in
     let y = y - 1 in
@@ -630,7 +650,7 @@ let delete_character_backwards view cursor =
     let characters = 0 in
     let lines = 1 in
     set_text view.file (Text.delete_region ~x ~y ~characters ~lines text);
-    update_all_marks_after_delete ~x ~y ~characters ~lines view.file.views
+    update_views_after_delete ~x ~y ~characters ~lines view.file.views
 
 let reset_preferred_x file =
   foreach_view file @@ fun view ->
@@ -714,7 +734,7 @@ let delete_from_cursors view get_other_position =
   in
 
   set_text view.file (Text.delete_region ~x ~y ~characters ~lines text);
-  update_all_marks_after_delete ~x ~y ~characters ~lines view.file.views
+  update_views_after_delete ~x ~y ~characters ~lines view.file.views
 
 let get_selected_text text cursor =
   let left, right = selection_boundaries cursor in
@@ -746,21 +766,22 @@ let paste (global_clipboard: Clipboard.t) view =
   (* Update marks. *)
   let lines = Text.get_line_count sub - 1 in
   let characters = Text.get_line_length lines sub in
-  update_all_marks_after_insert ~x ~y ~characters ~lines view.file.views
+  update_views_after_insert ~x ~y ~characters ~lines view.file.views
 
 let restore_undo_point file undo =
   file.text <- undo.undo_text;
   file.modified <- undo.undo_modified;
-  let undo_mark undo =
+  let restore_mark undo =
     undo.undo_mark.x <- undo.undo_x;
     undo.undo_mark.y <- undo.undo_y;
   in
-  let undo_view undo =
+  let restore_view undo =
     undo.undo_view.scroll_x <- undo.undo_scroll_x;
     undo.undo_view.scroll_y <- undo.undo_scroll_y;
-    List.iter undo_mark undo.undo_marks
+    List.iter restore_mark undo.undo_marks;
+    undo.undo_view.style <- undo.undo_style;
   in
-  List.iter undo_view undo.undo_views
+  List.iter restore_view undo.undo_views
 
 let undo file =
   edit false file @@ fun () ->

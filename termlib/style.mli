@@ -45,3 +45,11 @@ val faint:
   ?fg: Term.color ->
   ?bg: Term.color ->
   unit -> t
+
+(** Same as [make], but randomize unspecified fields. *)
+val random:
+  ?intensity: Term.intensity ->
+  ?underline: bool ->
+  ?fg: Term.color ->
+  ?bg: Term.color ->
+  unit -> t
