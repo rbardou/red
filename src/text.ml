@@ -1,10 +1,10 @@
-type t = Line.t Sequence.t
+type 'a t = 'a Line.t Sequence.t
 
 let empty = Sequence.one Line.empty
 
 let one_line = Sequence.one
 
-let output_channel ch (text: t) =
+let output_channel ch text =
   let first = ref true in
   let output_line line =
     if !first then
@@ -15,11 +15,11 @@ let output_channel ch (text: t) =
   in
   Sequence.iter output_line text
 
-let output_file ?perm filename (text: t) =
+let output_file ?perm filename text =
   System.with_open_out ?perm filename @@ fun ch ->
   output_channel ch text
 
-let to_string (text: t) =
+let to_string text =
   (* TODO: compute buffer size? We expect [to_string] to be used for small texts only. *)
   let buf = Buffer.create 512 in
   let first = ref true in
@@ -70,24 +70,24 @@ let of_utf8_substrings_offset_0 substrings =
   in
   of_utf8_string string
 
-let get x y (text: t) =
+let get x y text =
   match Sequence.get y text with
     | None ->
         None
     | Some line ->
         Line.get x line
 
-let get_line_count (text: t) =
+let get_line_count text =
   Sequence.count text
 
-let get_line_length y (text: t) =
+let get_line_length y text =
   match Sequence.get y text with
     | None ->
         0
     | Some line ->
         Line.length line
 
-let insert_character x y character (text: t) =
+let insert x y character text =
   match Sequence.get y text with
     | None ->
         text
@@ -97,7 +97,7 @@ let insert_character x y character (text: t) =
         (* Replace line. *)
         Sequence.set y line text
 
-let insert_new_line x y (text: t) =
+let insert_new_line x y text =
   match Sequence.get y text with
     | None ->
         text
@@ -108,7 +108,7 @@ let insert_new_line x y (text: t) =
         (* Add the right part as a new line. *)
         Sequence.insert (y + 1) right text
 
-let delete_region ~x ~y ~characters ~lines (text: t) =
+let delete_region ~x ~y ~characters ~lines text =
   if lines = 0 then
     (* Delete in the middle of line [y]. *)
       match Sequence.get y text with
@@ -148,14 +148,14 @@ let delete_region ~x ~y ~characters ~lines (text: t) =
     in
     remove_lines (lines - 1) text
 
-let get_line y (text: t) =
+let get_line y text =
   match Sequence.get y text with
     | None ->
         Line.empty
     | Some line ->
         line
 
-let sub ~x1 ~y1 ~x2 ~y2 (text: t) =
+let sub ~x1 ~y1 ~x2 ~y2 text =
   if y1 > y2 then
     empty
   else if y1 = y2 then
@@ -176,7 +176,7 @@ let sub ~x1 ~y1 ~x2 ~y2 (text: t) =
     |> Sequence.prepend first
     |> Sequence.append last
 
-let insert_text ~x ~y ~sub (text: t): t =
+let insert_text ~x ~y ~sub text =
   let line = get_line y text in
   let left, right = Line.split x line in
 

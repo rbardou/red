@@ -1,32 +1,32 @@
 (** Immutable texts. *)
 
 (** Immutable texts, i.e. sequences of lines. *)
-type t
+type 'a t
 
 (** A text with only one empty line. *)
-val empty: t
+val empty: 'a t
 
 (** A text with only one non-empty line. *)
-val one_line: Line.t -> t
+val one_line: 'a Line.t -> 'a t
 
 (** Output to file.
 
     May raise [System.Error]. *)
-val output_file: ?perm: Unix.file_perm -> string -> t -> unit
+val output_file: ?perm: Unix.file_perm -> string -> Character.t t -> unit
 
 (** Convert to a string. *)
 (* TODO: rename into to_utf8_string? or to_utf8?
    or assume UTF8 everywhere and rename of_utf8_string into of_string instead? *)
-val to_string: t -> string
+val to_string: Character.t t -> string
 
 (** Convert from a string. *)
-val of_utf8_string: string -> t
+val of_utf8_string: string -> Character.t t
 
 (** Make a text from a list of substrings.
 
     Each substring is of the form: [(string, len)]
     (the offset is implicitely [0]). *)
-val of_utf8_substrings_offset_0: (string * int) list -> t
+val of_utf8_substrings_offset_0: (string * int) list -> Character.t t
 
 (** Get a character at a given position.
 
@@ -34,46 +34,46 @@ val of_utf8_substrings_offset_0: (string * int) list -> t
 
     Return character at line [y], column [x].
     Both [x] and [y] start at [0]. *)
-val get: int -> int -> t -> Character.t option
+val get: int -> int -> 'a t -> 'a option
 
 (** Get a line given its index.
 
     Return the empty line if line does not exist. *)
-val get_line: int -> t -> Line.t
+val get_line: int -> 'a t -> 'a Line.t
 
 (** Get the number of lines in a text.
 
     Usage: [get_line_count y text] *)
-val get_line_count: t -> int
+val get_line_count: 'a t -> int
 
 (** Get length of a given line.
 
     Usage: [get_line_length y text] *)
-val get_line_length: int -> t -> int
+val get_line_length: int -> 'a t -> int
 
 (** Insert a character at a given position.
 
     Usage: [insert (x, y) character text] *)
-val insert_character: int -> int -> Character.t -> t -> t
+val insert: int -> int -> 'a -> 'a t -> 'a t
 
 (** Insert a new line at a given position.
 
     Usage: [insert (x, y) text] *)
-val insert_new_line: int -> int -> t -> t
+val insert_new_line: int -> int -> 'a t -> 'a t
 
 (** Delete a region.
 
     Start at [x, y].
     Remove until [lines] newline characters, then [characters] more characters. *)
-val delete_region: x: int -> y: int -> characters: int -> lines: int -> t -> t
+val delete_region: x: int -> y: int -> characters: int -> lines: int -> 'a t -> 'a t
 
 (** Get a subpart of a text.
 
     [(x2, y2)] should be after [(x1, y1)]. *)
-val sub: x1: int -> y1: int -> x2: int -> y2: int -> t -> t
+val sub: x1: int -> y1: int -> x2: int -> y2: int -> 'a t -> 'a t
 
 (** Insert a text inside a text. *)
-val insert_text: x: int -> y: int -> sub: t -> t -> t
+val insert_text: x: int -> y: int -> sub: 'a t -> 'a t -> 'a t
 
 (** Append a character (which may in particular be [\n] to create a new line) to a text. *)
-val append_character: Character.t -> t -> t
+val append_character: Character.t -> Character.t t -> Character.t t

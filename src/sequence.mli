@@ -3,7 +3,7 @@
     Items can be inserted or deleted efficiently given their index. *)
 
 (** Sequences. *)
-type 'a t
+type +'a t
 
 (** Show a sequence, for debugging. *)
 val show: ('a -> string) -> 'a t -> string

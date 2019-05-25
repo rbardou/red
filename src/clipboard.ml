@@ -1,4 +1,4 @@
 type t =
   {
-    mutable text: Text.t;
+    mutable text: Character.t Text.t;
   }

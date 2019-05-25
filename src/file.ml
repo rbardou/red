@@ -45,7 +45,7 @@ type prompt =
 type t =
   {
     mutable views: view list;
-    mutable text: Text.t;
+    mutable text: Character.t Text.t;
     mutable modified: bool;
     mutable name: string;
     mutable filename: string option;
@@ -77,7 +77,7 @@ and view =
 
 and undo =
   {
-    undo_text: Text.t;
+    undo_text: Character.t Text.t;
     undo_modified: bool;
     undo_views: undo_view list;
   }
@@ -599,7 +599,7 @@ let delete_selection view cursor =
   update_all_marks_after_delete ~x ~y ~characters ~lines view.file.views
 
 let insert_character (character: Character.t) view cursor =
-  set_text view.file (Text.insert_character cursor.position.x cursor.position.y character view.file.text);
+  set_text view.file (Text.insert cursor.position.x cursor.position.y character view.file.text);
   update_all_marks_after_insert ~x: cursor.position.x ~y: cursor.position.y ~characters: 1 ~lines: 0 view.file.views
 
 let insert_new_line view cursor =
