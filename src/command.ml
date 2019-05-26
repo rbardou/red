@@ -10,6 +10,7 @@ type context =
   | File
   | Prompt
   | List_choice
+  | Help
 
 let bind context (state: State.t) key name =
   let command =
@@ -21,10 +22,11 @@ let bind context (state: State.t) key name =
           command
   in
   match context with
-    | Global -> state.global_bindings <- Key.Map.add key command state.global_bindings
-    | File -> state.file_bindings <- Key.Map.add key command state.file_bindings
-    | Prompt -> state.prompt_bindings <- Key.Map.add key command state.prompt_bindings
-    | List_choice -> state.list_choice_bindings <- Key.Map.add key command state.list_choice_bindings
+    | Global -> state.global_bindings <- Key.Map.add key (name, command) state.global_bindings
+    | File -> state.file_bindings <- Key.Map.add key (name, command) state.file_bindings
+    | Prompt -> state.prompt_bindings <- Key.Map.add key (name, command) state.prompt_bindings
+    | List_choice -> state.list_choice_bindings <- Key.Map.add key (name, command) state.list_choice_bindings
+    | Help -> state.help_bindings <- Key.Map.add key (name, command) state.help_bindings
 
 (******************************************************************************)
 (*                                   Helpers                                  *)
@@ -423,6 +425,39 @@ let () = define "quit" @@ fun state ->
     in
     prompt_confirmation ~global: true message state @@ fun () ->
     raise State.Exit
+
+let () = define "help" @@ fun state ->
+  (* Create help panel. *)
+  let help_panel =
+    let text, style = Help.make state in
+    let file = File.create ~read_only: true "help" text in
+    let initial_layout = state.layout in
+    let initial_focus = state.focus in
+    let restore () =
+      State.set_layout state initial_layout;
+      State.set_focus state initial_focus;
+    in
+    let view = File.create_view (Help { restore }) file in
+    view.style <- style;
+    Panel.create view
+  in
+
+  (* Replace layout. *)
+  State.set_layout state (Layout.single help_panel);
+  State.set_focus state help_panel
+
+let () = define "cancel" @@ fun state ->
+  match state.focus.view.kind with
+    | Help { restore } ->
+        (* TODO: if initial layout contains panels which view files which were killed, they need to change view. *)
+        restore ()
+    | Prompt _ ->
+        State.remove_panel state.focus state
+    | List_choice { original_view } ->
+        (* TODO: if initial layout contains panels which view files which were killed, they need to change view. *)
+        state.focus.view <- original_view
+    | _ ->
+        ()
 
 let () = define "save" @@ fun state ->
   let file_to_save = state.focus.view.file in

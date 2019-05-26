@@ -97,3 +97,6 @@ let random
   let fg = random_color fg in
   let bg = random_color bg in
   { intensity; underline; fg; bg }
+
+let fg fg =
+  make ~fg ()

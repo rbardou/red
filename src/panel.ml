@@ -64,15 +64,16 @@ let render_view
     done;
   done
 
+let make_status_bar_style has_focus =
+  if has_focus then
+    Style.make ~bg: Cyan ~fg: Black ()
+  else
+    Style.make ~bg: White ~fg: Black ()
+
 (* Render status bar for a panel of kind [File]. *)
 let render_file_status_bar has_focus (frame: Render.frame) (view: File.view) ~x ~y ~w =
   let file = view.file in
-  let style =
-    if has_focus then
-      Style.make ~bg: Cyan ~fg: Black ()
-    else
-      Style.make ~bg: White ~fg: Black ()
-  in
+  let style = make_status_bar_style has_focus in
 
   (* Render "Modified" flag. *)
   Render.set frame x y (
@@ -180,19 +181,24 @@ let filter_choices filter choices =
 let render focused_panel (frame: Render.frame) panel ~x ~y ~w ~h =
   let has_focus = panel == focused_panel in
   let view = panel.view in
+
+  let render_view ~x ~y ~w ~h =
+    let cursor_style =
+      if has_focus then
+        Style.make ~fg: Black ~bg: Cyan ()
+      else
+        Style.make ~fg: Black ~bg: Yellow ()
+    in
+    render_view
+      ~style: Style.default
+      ~cursor_style
+      ~selection_style: (Style.make ~fg: Black ~bg: White ())
+      frame view ~x ~y ~w ~h
+  in
+
   match panel.view.kind with
     | File ->
-        let cursor_style =
-          if has_focus then
-            Style.make ~fg: Black ~bg: Cyan ()
-          else
-            Style.make ~fg: Black ~bg: Yellow ()
-        in
-        render_view
-          ~style: Style.default
-          ~cursor_style
-          ~selection_style: (Style.make ~fg: Black ~bg: White ())
-          frame view ~x ~y ~w ~h: (h - 1);
+        render_view ~x ~y ~w ~h: (h - 1);
         render_file_status_bar has_focus frame view ~x ~y: (y + h - 1) ~w
 
     | Prompt { prompt } ->
@@ -203,3 +209,8 @@ let render focused_panel (frame: Render.frame) panel ~x ~y ~w ~h =
         let choices = filter_choices filter choices in
         render_choice_list frame choices choice ~x ~y ~w ~h: (h - 1);
         render_prompt has_focus frame view prompt ~x ~y: (y + h - 1) ~w
+
+    | Help _ ->
+        render_view ~x ~y ~w ~h: (h - 1);
+        let style = make_status_bar_style has_focus in
+        Render.text ~style frame 0 (y + h - 1) w "Press Q to close help."

@@ -53,3 +53,6 @@ val random:
   ?fg: Term.color ->
   ?bg: Term.color ->
   unit -> t
+
+(** Same as [make ~fg ()]. *)
+val fg: Term.color -> t

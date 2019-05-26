@@ -4,10 +4,11 @@ type t =
     mutable focus: Panel.t;
 
     (* Global bindings can be overridden by local bindings. *)
-    mutable global_bindings: (t -> unit) Key.Map.t;
-    mutable file_bindings: (t -> unit) Key.Map.t;
-    mutable prompt_bindings: (t -> unit) Key.Map.t;
-    mutable list_choice_bindings: (t -> unit) Key.Map.t;
+    mutable global_bindings: (string * (t -> unit)) Key.Map.t;
+    mutable file_bindings: (string * (t -> unit)) Key.Map.t;
+    mutable prompt_bindings: (string * (t -> unit)) Key.Map.t;
+    mutable list_choice_bindings: (string * (t -> unit)) Key.Map.t;
+    mutable help_bindings: (string * (t -> unit)) Key.Map.t;
 
     (* Files to check for modification before exiting.
        Also files that should not be reopened (reuse them instead). *)
@@ -31,6 +32,7 @@ let create ?focus layout =
     file_bindings = Key.Map.empty;
     prompt_bindings = Key.Map.empty;
     list_choice_bindings = Key.Map.empty;
+    help_bindings = Key.Map.empty;
     clipboard = { text = Text.empty };
     files = [];
   }
@@ -44,13 +46,14 @@ let abort ?exn reason =
 
 let abort ?exn x = Printf.ksprintf (abort ?exn) x
 
+let get_local_bindings state =
+  match state.focus.view.kind with
+    | File -> state.file_bindings
+    | Prompt _ -> state.prompt_bindings
+    | List_choice _ -> state.list_choice_bindings
+    | Help _ -> state.help_bindings
+
 let on_key_press state (key: Key.t) =
-  let local_bindings =
-    match state.focus.view.kind with
-      | File -> state.file_bindings
-      | Prompt _ -> state.prompt_bindings
-      | List_choice _ -> state.list_choice_bindings
-  in
   let catch f x =
     try
       f x
@@ -60,12 +63,12 @@ let on_key_press state (key: Key.t) =
       | System.Error reason ->
           Log.error "%s" reason
   in
-  match Key.Map.find key local_bindings with
-    | command ->
+  match Key.Map.find key (get_local_bindings state) with
+    | _, command ->
         catch command state
     | exception Not_found ->
         match Key.Map.find key state.global_bindings with
-          | command ->
+          | _, command ->
               catch command state
           | exception Not_found ->
               match Key.symbol key with
@@ -110,7 +113,7 @@ let set_focus state focus =
     match state.focus.view.kind with
       | Prompt _ ->
           remove_panel state.focus state
-      | File | List_choice _ ->
+      | File | List_choice _ | Help _ ->
           ()
   );
   state.focus <- focus

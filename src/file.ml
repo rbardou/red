@@ -119,6 +119,7 @@ type t =
     mutable modified: bool;
     mutable name: string;
     mutable filename: string option;
+    mutable read_only: bool;
 
     mutable undo_stack: undo list;
     mutable redo_stack: undo list;
@@ -189,10 +190,16 @@ and choice =
     original_view: view;
   }
 
+and help =
+  {
+    restore: unit -> unit;
+  }
+
 and view_kind =
   | File
   | Prompt of prompt
   | List_choice of choice
+  | Help of help
 
 let get_name file =
   file.name
@@ -755,17 +762,18 @@ let create_view kind file =
     }
   in
   file.views <- view :: file.views;
-  set_stylist_module view (Some ocaml_stylist);
+  if kind = File then set_stylist_module view (Some ocaml_stylist);
   view
 
 (* You may want to use [State.create_file] instead. *)
-let create name text =
+let create ?(read_only = false) name text =
   {
     views = [];
     text;
     modified = false;
     name;
     filename = None;
+    read_only;
     loading = No;
     undo_stack = [];
     redo_stack = [];
@@ -930,6 +938,7 @@ let create_process file program arguments =
   read true Started out_exit
 
 let is_read_only file =
+  file.read_only ||
   match file.loading with
     | No ->
         false

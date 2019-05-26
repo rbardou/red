@@ -87,8 +87,16 @@ val insert_text: x: int -> y: int -> sub: 'a t -> 'a t -> 'a t
 (** Append a character (which may in particular be [\n] to create a new line) to a text. *)
 val append_character: Character.t -> Character.t t -> Character.t t
 
+(** Insert an empty line at the end. *)
+val append_new_line: 'a t -> 'a t
+
 (** Apply a function to all characters. *)
 val map: ('a -> 'b) -> 'a t -> 'b t
 
 (** Apply a function to all values from [(x1, y1)] to [(x2, y2)]. *)
 val map_sub: x1: int -> y1: int -> x2: int -> y2: int -> ('a -> 'a) -> 'a t -> 'a t
+
+(** Concatenate two texts.
+
+    The first line of the second text is appended to the last line of the first one. *)
+val concat: 'a t -> 'a t -> 'a t

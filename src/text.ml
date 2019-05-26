@@ -229,9 +229,12 @@ let insert_text ~x ~y ~sub text =
   (* Replace it by inserting the lines of [sub]. *)
   Sequence.insert_sub y sub text
 
+let append_new_line text =
+  Sequence.append Line.empty text
+
 let append_character character text =
   if character = "\n" then
-    Sequence.append Line.empty text
+    append_new_line text
   else
     let last_line_index = Sequence.count text - 1 in
     let last_line =
@@ -270,3 +273,10 @@ let map_sub ~x1 ~y1 ~x2 ~y2 f text =
     let last_line = get_line y2 text in
     let last_line = Line.map_until x2 f last_line in
     Sequence.set y2 last_line text
+
+let concat a b =
+  let a_line_count = get_line_count a in
+  let a_last_line = get_line (a_line_count - 1) a in
+  let b_first_line = get_line 0 b in
+  let a = Sequence.set (a_line_count - 1) (Line.concat a_last_line b_first_line) a in
+  Sequence.concat a (Sequence.remove 0 b)

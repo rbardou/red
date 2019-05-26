@@ -111,7 +111,7 @@ let output ?previous_frame frame =
         style := cell_style;
 
         (* Output cell contents. *)
-        print_string cell.character
+        print_string cell.character;
       )
       else
         cursor_ok := false

@@ -40,6 +40,8 @@ let main () =
   let (=>) = Command.bind Global state in
 
   Alt_escape => "quit";
+  F1 => "help";
+  Ctrl_h => "help";
   F4 => "remove_panel"; (* TODO: better binding? *)
 
   Right => "move_right";
@@ -107,14 +109,22 @@ let main () =
   (* Prompt Bindings *)
   let (=>) = Command.bind Prompt state in
 
+  Ctrl_g => "cancel";
   Return => "validate";
 
   (* List choice Bindings *)
   let (=>) = Command.bind List_choice state in
 
+  Ctrl_g => "cancel";
   Up => "choose_next";
   Down => "choose_previous";
   Return => "validate";
+
+  (* Help Bindings *)
+  let (=>) = Command.bind Help state in
+
+  Ctrl_g => "cancel";
+  Letter_q => "cancel";
 
   Term_run.run_raw_mode
     ~on_key_press: (State.on_key_press state)
