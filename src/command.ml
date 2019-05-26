@@ -1,32 +1,28 @@
-module String_map = Map.Make (String)
+open Misc
 
-let commands = ref String_map.empty
+let commands: State.command_definitions ref = ref String_map.empty
 
-let define name (f: State.t -> unit) =
-  commands := String_map.add name f !commands
+let define name (run: State.t -> unit) =
+  commands := String_map.add name ({ name; run }: State.command) !commands
 
-type context =
-  | Global
-  | File
-  | Prompt
-  | List_choice
-  | Help
+let noop: State.command =
+  {
+    name = "noop";
+    run = fun _ -> ();
+  }
 
-let bind context (state: State.t) key name =
+let bind (context: State.Context.t) (state: State.t) key name =
   let command =
     match String_map.find name !commands with
       | exception Not_found ->
           Log.error "unbound command: %s" name;
-          (fun _ -> ())
+          noop
       | command ->
           command
   in
-  match context with
-    | Global -> state.global_bindings <- Key.Map.add key (name, command) state.global_bindings
-    | File -> state.file_bindings <- Key.Map.add key (name, command) state.file_bindings
-    | Prompt -> state.prompt_bindings <- Key.Map.add key (name, command) state.prompt_bindings
-    | List_choice -> state.list_choice_bindings <- Key.Map.add key (name, command) state.list_choice_bindings
-    | Help -> state.help_bindings <- Key.Map.add key (name, command) state.help_bindings
+  let context_bindings = State.get_context_bindings context state in
+  let context_bindings = Key.Map.add key command context_bindings in
+  state.bindings <- State.Context_map.add context context_bindings state.bindings
 
 (******************************************************************************)
 (*                                   Helpers                                  *)
@@ -411,6 +407,8 @@ let choose_from_file_system ?default (prompt: string) (state: State.t) (validate
 (*                                 Definitions                                *)
 (******************************************************************************)
 
+let () = define noop.name noop.run
+
 let () = define "quit" @@ fun state ->
   let modified_files = List.filter (fun (file: File.t) -> file.modified) state.files in
   let modified_file_count = List.length modified_files in
@@ -429,7 +427,7 @@ let () = define "quit" @@ fun state ->
 let () = define "help" @@ fun state ->
   (* Create help panel. *)
   let help_panel =
-    let text, style = Help.make state in
+    let text, style = Help.make !commands state in
     let file = File.create ~read_only: true "help" text in
     let initial_layout = state.layout in
     let initial_focus = state.focus in
@@ -660,8 +658,8 @@ let () = define "execute_command" @@ fun state ->
   match String_map.find name !commands with
     | exception Not_found ->
         abort "unbound command: %s" name
-    | command ->
-        command state
+    | { run } ->
+        run state
 
 let () = define "execute_process" @@ fun state ->
   let panel = state.focus in

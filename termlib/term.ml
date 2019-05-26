@@ -1,3 +1,18 @@
+let string_of_char_list_rev l =
+  let len = List.length l in
+  let bytes = Bytes.create len in
+  let rec loop index l =
+    if index >= 0 then
+      match l with
+        | [] ->
+            assert false
+        | head :: tail ->
+            Bytes.set bytes index head;
+            loop (index - 1) tail
+  in
+  loop (len - 1) l;
+  Bytes.unsafe_to_string bytes
+
 (* Missing entry from module [Sys]: signal SIGWINCH, which indicates that
    window changed. *)
 let sigwinch = 28
@@ -140,12 +155,12 @@ let rec show_input_state state =
         "Empty"
     | Unicode (partial, remaining) ->
         Printf.sprintf "Unicode (%S, %d)"
-          (Misc.string_of_char_list_rev partial) remaining
+          (string_of_char_list_rev partial) remaining
     | Escape ->
         "Escape"
     | Escape_unicode (partial, remaining) ->
         Printf.sprintf "Escape_unicode (%S, %d)"
-          (Misc.string_of_char_list_rev partial) remaining
+          (string_of_char_list_rev partial) remaining
     | Escape_bracket x ->
         "Escape_bracket " ^ string_of_int x
     | Escape_bracket_semi (x, y) ->
@@ -678,7 +693,7 @@ let input_char state char: input_state =
     | Unicode (partial, _), '\000' .. '\127' -> Invalid (state, char)
     | Unicode (partial, remaining), '\128' .. '\191' ->
         if remaining = 1 then
-          Done (Unicode (Misc.string_of_char_list_rev (char :: partial)))
+          Done (Unicode (string_of_char_list_rev (char :: partial)))
         else
           Unicode (char :: partial, remaining - 1)
     | Unicode (partial, _), '\192' .. '\255' -> Invalid (state, char)
@@ -686,7 +701,7 @@ let input_char state char: input_state =
     | Escape_unicode (partial, _), '\000' .. '\127' -> Invalid (state, char)
     | Escape_unicode (partial, remaining), '\128' .. '\191' ->
         if remaining = 1 then
-          Done (Alt_unicode (Misc.string_of_char_list_rev (char :: partial)))
+          Done (Alt_unicode (string_of_char_list_rev (char :: partial)))
         else
           Escape_unicode (char :: partial, remaining - 1)
     | Escape_unicode (partial, _), '\192' .. '\255' -> Invalid (state, char)

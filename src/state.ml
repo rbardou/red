@@ -1,14 +1,41 @@
-type t =
+open Misc
+
+module Context =
+struct
+  type t =
+    | Global
+    | File
+    | Prompt
+    | List_choice
+    | Help
+
+  let compare = Pervasives.compare
+
+  let list =
+    [
+      Global;
+      File;
+      Prompt;
+      List_choice;
+      Help;
+    ]
+end
+
+module Context_map = Map.Make (Context)
+
+type command =
+  {
+    name: string;
+    run: t -> unit;
+  }
+
+and t =
   {
     mutable layout: Layout.t;
     mutable focus: Panel.t;
 
     (* Global bindings can be overridden by local bindings. *)
-    mutable global_bindings: (string * (t -> unit)) Key.Map.t;
-    mutable file_bindings: (string * (t -> unit)) Key.Map.t;
-    mutable prompt_bindings: (string * (t -> unit)) Key.Map.t;
-    mutable list_choice_bindings: (string * (t -> unit)) Key.Map.t;
-    mutable help_bindings: (string * (t -> unit)) Key.Map.t;
+    mutable bindings: bindings Context_map.t;
 
     (* Files to check for modification before exiting.
        Also files that should not be reopened (reuse them instead). *)
@@ -16,6 +43,10 @@ type t =
 
     clipboard: Clipboard.t;
   }
+
+and bindings = command Key.Map.t
+
+type command_definitions = command String_map.t
 
 let create ?focus layout =
   let focus =
@@ -28,11 +59,7 @@ let create ?focus layout =
   {
     layout;
     focus;
-    global_bindings = Key.Map.empty;
-    file_bindings = Key.Map.empty;
-    prompt_bindings = Key.Map.empty;
-    list_choice_bindings = Key.Map.empty;
-    help_bindings = Key.Map.empty;
+    bindings = Context_map.empty;
     clipboard = { text = Text.empty };
     files = [];
   }
@@ -46,12 +73,26 @@ let abort ?exn reason =
 
 let abort ?exn x = Printf.ksprintf (abort ?exn) x
 
+let get_context_bindings context state =
+  match Context_map.find context state.bindings with
+    | exception Not_found ->
+        Key.Map.empty
+    | bindings ->
+        bindings
+
 let get_local_bindings state =
   match state.focus.view.kind with
-    | File -> state.file_bindings
-    | Prompt _ -> state.prompt_bindings
-    | List_choice _ -> state.list_choice_bindings
-    | Help _ -> state.help_bindings
+    | File ->
+        get_context_bindings File state
+    | Prompt _ ->
+        get_context_bindings Prompt state
+    | List_choice _ ->
+        get_context_bindings List_choice state
+    | Help _ ->
+        get_context_bindings Help state
+
+let get_global_bindings state =
+  get_context_bindings Global state
 
 let on_key_press state (key: Key.t) =
   let catch f x =
@@ -64,12 +105,12 @@ let on_key_press state (key: Key.t) =
           Log.error "%s" reason
   in
   match Key.Map.find key (get_local_bindings state) with
-    | _, command ->
-        catch command state
+    | { run } ->
+        catch run state
     | exception Not_found ->
-        match Key.Map.find key state.global_bindings with
-          | _, command ->
-              catch command state
+        match Key.Map.find key (get_global_bindings state) with
+          | { run } ->
+              catch run state
           | exception Not_found ->
               match Key.symbol key with
                 | ASCII char ->
