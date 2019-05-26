@@ -514,6 +514,45 @@ let rec map f sequence =
     | Node (color, count, value, left, right) ->
         Node (color, count, f value, map f left, map f right)
 
+let rec map_sub first last f sequence =
+  if last < first then
+    sequence
+  else
+    match sequence with
+      | Leaf ->
+          Leaf
+      | Double_black_leaf ->
+          Double_black_leaf
+      | Node (color, node_count, value, left, right) ->
+          let left_count = count left in
+          if last < left_count then
+            (* Everything is strictly on the left. *)
+            Node (
+              color, node_count, value,
+              map_sub first last f left,
+              right
+            )
+          else if first > left_count then
+            (* Everything is strictly on the right. *)
+            Node (
+              color, node_count, value,
+              left,
+              map_sub (first - left_count - 1) (last - left_count - 1) f right
+            )
+          else
+            (* Interval includes current node. *)
+            Node (
+              color, node_count, f value,
+              map_sub first (left_count - 1) f left,
+              map_sub 0 (last - left_count - 1) f right
+            )
+
+let map_until last f sequence =
+  map_sub 0 last f sequence
+
+let map_from first f sequence =
+  map_sub first (count sequence - 1) f sequence
+
 let rec fold f acc sequence =
   match sequence with
     | Leaf

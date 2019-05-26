@@ -36,6 +36,11 @@ val of_utf8_substrings_offset_0: (string * int) list -> Character.t t
     Both [x] and [y] start at [0]. *)
 val get: int -> int -> 'a t -> 'a option
 
+(** Set a character at a given position.
+
+    Usage: [set x y character text] *)
+val set: int -> int -> 'a -> 'a t -> 'a t
+
 (** Get a line given its index.
 
     Return the empty line if line does not exist. *)
@@ -84,3 +89,6 @@ val append_character: Character.t -> Character.t t -> Character.t t
 
 (** Apply a function to all characters. *)
 val map: ('a -> 'b) -> 'a t -> 'b t
+
+(** Apply a function to all values from [(x1, y1)] to [(x2, y2)]. *)
+val map_sub: x1: int -> y1: int -> x2: int -> y2: int -> ('a -> 'a) -> 'a t -> 'a t

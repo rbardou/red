@@ -77,6 +77,14 @@ let get x y text =
     | Some line ->
         Line.get x line
 
+let set x y character text =
+  match Sequence.get y text with
+    | None ->
+        invalid_arg (Printf.sprintf "Text.set %d %d: no such line" x y)
+    | Some line ->
+        let line = Line.set x character line in
+        Sequence.set y line text
+
 let get_line_count text =
   Sequence.count text
 
@@ -86,6 +94,13 @@ let get_line_length y text =
         0
     | Some line ->
         Line.length line
+
+let is_line_empty y text =
+  match Sequence.get y text with
+    | None ->
+        true
+    | Some line ->
+        Line.is_empty line
 
 let insert x y character text =
   match Sequence.get y text with
@@ -230,3 +245,28 @@ let append_character character text =
 
 let map f text =
   Sequence.map (Line.map f) text
+
+let map_sub ~x1 ~y1 ~x2 ~y2 f text =
+  if y2 < y1 then
+    text
+  else if y1 = y2 then
+    if x2 < x1 then
+      text
+    else
+      let line = get_line y1 text in
+      let line = Line.map_sub x1 x2 f line in
+      Sequence.set y1 line text
+  else
+    (* Map the first line. *)
+    let first_line = get_line y1 text in
+    let first_line = Line.map_from x1 f first_line in
+    let text = Sequence.set y1 first_line text in
+
+    (* Map the middle. *)
+    let map_line line = Line.map f line in
+    let text = Sequence.map_sub (y1 + 1) (y2 - 1) map_line text in
+
+    (* Map the last line. *)
+    let last_line = get_line y2 text in
+    let last_line = Line.map_until x2 f last_line in
+    Sequence.set y2 last_line text

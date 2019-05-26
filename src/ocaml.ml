@@ -1,4 +1,4 @@
-module Lexer =
+module Stylist =
 struct
 
   type t =
@@ -33,6 +33,10 @@ struct
     | String_backslash_invalid
     | String_backslash_end
     | String_end
+
+  let equivalent = (=)
+
+  let start = Other
 
   let show state =
     match state with
@@ -115,7 +119,7 @@ struct
 
   let start = Other
 
-  let add_char (type a) (character: Character.t) (continue: t -> a) (start: Render.style -> t -> a) state: a =
+  let add_char (type a) (character: Character.t) state (continue: t -> a) (start: Style.t -> t -> a): a =
     let start new_state = start (style state) new_state in
     if String.length character = 0 then
       continue state
@@ -177,13 +181,13 @@ struct
           | Comment_end | String_end | Char_end | Uppercase_identifier _ | Module), _ ->
             start Other
 
-  let end_of_file (type a) state: Render.style =
+  let end_of_file (type a) state: Style.t =
     style state
 
 end
 
 let test verbose string =
-  let set_style start index (style: Render.style) =
+  let set_style start index (style: Style.t) =
     Term.fg_color style.fg;
     Term.bg_color style.bg;
     Term.intensity style.intensity;
@@ -192,22 +196,22 @@ let test verbose string =
     Term.reset_style ()
   in
   let rec loop start index state =
-    if verbose then print_endline ("State: " ^ Lexer.show state);
+    if verbose then print_endline ("State: " ^ Stylist.show state);
     if index >= String.length string then
       (
-        set_style start index (Lexer.end_of_file state);
+        set_style start index (Stylist.end_of_file state);
         if verbose then (
           print_newline ();
-          print_endline ("Final state: " ^ Lexer.show state);
+          print_endline ("Final state: " ^ Stylist.show state);
         );
       )
     else
       let continue state = loop start (index + 1) state in
       let start style state = set_style start index style; loop index (index + 1) state in
       if verbose then Printf.printf "Char: %C\n" string.[index];
-      Lexer.add_char (String.make 1 string.[index]) continue start state
+      Stylist.add_char (String.make 1 string.[index]) state continue start
   in
-  loop 0 0 Lexer.start
+  loop 0 0 Stylist.start
 
 let () =
   test false "\

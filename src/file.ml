@@ -42,6 +42,76 @@ type prompt =
     validate: string -> unit;
   }
 
+type 'state stylist_status =
+  (* Notĥing to do, style is already up-to-date. *)
+  | Up_to_date
+
+  (* Going backwards, looking for the beginning of the token which we just modified. *)
+  | Search_beginning of {
+      next_x: int; (* next position to read (backwards), must start one character before edits *)
+      next_y: int;
+      end_x: int; (* must update at least until this position *)
+      end_y: int;
+    }
+
+  (* Going forwards, parsing tokens. *)
+  | Parse of {
+      start_x: int; (* current token position *)
+      start_y: int;
+      state: 'state; (* state before next *)
+      next_x: int; (* next position to read *)
+      next_y: int;
+      end_x: int; (* must update at least until this position *)
+      end_y: int;
+    }
+
+type 'state stylist_module =
+  {
+    (* Initial state, i.e. the state before reading position [(0, 0)]. *)
+    start: 'state;
+
+    (* Test whether two states are similar enough to stop parsing.
+       Should most often be [(=)]. *)
+    equivalent: 'state -> 'state -> bool;
+
+    (* Update the state of a parser after reading one character.
+
+       Usage: [add_char char continue start state]
+
+       Shall call [continue] when the current token is not finished, i.e. [char] is part of it.
+       The state can change though; its new value shall be given to [continue].
+
+       Shall call [start] when the current token finishes, i.e. [char] is part of a new token.
+       The style of the token which just finished shall be given to [start], as well as the new state. *)
+    add_char: 'a. Character.t -> 'state -> ('state -> 'a) -> (Style.t -> 'state -> 'a) -> 'a;
+
+    (* Get the color of the final token. *)
+    end_of_file: 'state -> Style.t;
+  }
+
+type 'state stylist =
+  {
+    stylist_module: 'state stylist_module;
+
+    (* For each position [(x, y)], [state] contains the state
+       just before the character at this position is added.
+
+       Note that we do not store the state before newlines characters,
+       as we maintain [state] to have the same shape as the file [text]. *)
+    mutable state: 'state Text.t;
+
+    (* Stylists run concurrently in their own spawn group.
+       Only one of them may run at any given time, until the whole region denoted by [need_to_update_*] fields
+       has been updated.
+       Status is [None] if style is up to date. *)
+    mutable status: 'state stylist_status;
+
+    (* If a stylist is running in the background, [group] contains its group. *)
+    mutable group: Spawn.group option;
+  }
+
+type packed_stylist = Stylist: 'a stylist -> packed_stylist
+
 type t =
   {
     mutable views: view list;
@@ -74,6 +144,7 @@ and view =
     mutable marks: mark list;
     mutable cursors: cursor list;
     mutable style: Style.t Text.t;
+    mutable stylist: packed_stylist option;
   }
 
 and undo =
@@ -90,6 +161,7 @@ and undo_view =
     undo_scroll_y: int;
     undo_marks: undo_mark list;
     undo_style: Style.t Text.t;
+    undo_stylist: packed_undo_stylist option;
   }
 
 and undo_mark =
@@ -97,6 +169,15 @@ and undo_mark =
     undo_mark: mark;
     undo_x: int;
     undo_y: int;
+  }
+
+and packed_undo_stylist = Undo_stylist: 'a undo_stylist -> packed_undo_stylist
+
+and 'state undo_stylist =
+  {
+    undo_stylist_module: 'state stylist_module;
+    undo_state: 'state Text.t;
+    undo_status: 'state stylist_status;
   }
 
 and choice =
@@ -154,6 +235,220 @@ let recenter_y_if_needed view =
 let recenter_if_needed view =
   recenter_x_if_needed view;
   recenter_y_if_needed view
+
+let max_update_style_iteration_count = 1000
+
+let update_style_from_status view stylist status =
+  let rec search_beginning iteration next_x next_y end_x end_y =
+    if iteration >= max_update_style_iteration_count then
+      Search_beginning { next_x; next_y; end_x; end_y }
+
+    else
+      let stylist_module = stylist.stylist_module in
+      let text = view.file.text in
+
+      (* Get previous position. *)
+      let previous_position =
+        if next_x > 0 then
+          Some (next_x - 1, next_y)
+        else if next_y > 0 then
+          (* Skip newline characters until there is a non-empty line.
+             A file with very large amounts of sequential empty lines means that we block for a while,
+             but the alternative is to have [stylist.state] contain one more character per line and it
+             is annoying to maintain. *)
+          (* TODO: we can probably fix easily this actually *)
+          let rec find_non_empty_line y =
+            if y < 0 then
+              None
+            else
+              let length = Text.get_line_length y text in
+              if length = 0 then
+                find_non_empty_line (y - 1)
+              else
+                Some (length - 1, y)
+          in
+          find_non_empty_line (next_y - 1)
+        else
+          None
+      in
+
+      match previous_position with
+        | None ->
+            (* If no previous position, just parse from the start. *)
+            parse_forwards (iteration + 1) 0 0 stylist_module.start 0 0 end_x end_y
+
+        | Some (previous_x, previous_y) ->
+            (* Get character and state at previous position. *)
+            let previous_character =
+              match Text.get previous_x previous_y text with
+                | None ->
+                    Log.error "Text.get %d %d text: invalid position" previous_x previous_y;
+                    assert false (* previous_position should have been None *)
+                | Some character ->
+                    character
+            in
+            let previous_state =
+              match Text.get previous_x previous_y stylist.state with
+                | None ->
+                    Log.error "Text.get %d %d stylist.state: invalid position" previous_x previous_y;
+                    assert false (* previous_position should have been None *)
+                | Some state ->
+                    state
+            in
+
+            (* See if previous position is the start of a token. *)
+            stylist_module.add_char previous_character previous_state
+              (
+                fun _ ->
+                  (* If not, continue to search for the beginning of a token. *)
+                  search_beginning (iteration + 1) previous_x previous_y end_x end_y
+              )
+              (
+                fun _ _ ->
+                  (* If it is, start parsing from previous position. *)
+                  parse_forwards (iteration + 1) previous_x previous_y previous_state previous_x previous_y end_x end_y
+              )
+
+  and parse_forwards iteration start_x start_y state next_x next_y end_x end_y =
+    if iteration >= max_update_style_iteration_count then
+      Parse { start_x; start_y; state; next_x; next_y; end_x; end_y }
+
+    else
+      let stylist_module = stylist.stylist_module in
+      let text = view.file.text in
+
+      let set_style style =
+        view.style <- Text.map_sub ~x1: start_x ~y1: start_y ~x2: (next_x - 1) ~y2: next_y (fun _ -> style) view.style
+      in
+
+      let end_token old_state new_state new_next_x new_next_y =
+        let can_stop_here =
+          match old_state with
+            | None ->
+                false
+            | Some old_state ->
+                stylist_module.equivalent state old_state &&
+                { x = end_x; y = end_y } <% { x = next_x; y = next_y }
+        in
+        if can_stop_here then
+          Up_to_date
+        else
+          parse_forwards (iteration + 1) next_x next_y new_state new_next_x new_next_y end_x end_y
+      in
+
+      let feed_stylist_with_character old_state character new_next_x new_next_y =
+        stylist_module.add_char character state
+          (
+            (* Token continues. *)
+            fun state ->
+              parse_forwards (iteration + 1) start_x start_y state new_next_x new_next_y end_x end_y
+          )
+          (
+            (* Start of a new token. *)
+            fun style state ->
+              set_style style;
+              end_token old_state state new_next_x new_next_y
+          )
+      in
+
+      let line_count = Text.get_line_count text in
+      if next_y >= line_count then
+        (* End of file. *)
+        (
+          set_style (stylist_module.end_of_file state);
+          Up_to_date
+        )
+      else
+        let line_length = Text.get_line_length next_y text in
+        if next_x >= line_length then
+          (* End of line. *)
+          feed_stylist_with_character None "\n" 0 (next_y + 1)
+        else (
+          (* Regular character. *)
+          let old_state = Text.get next_x next_y stylist.state in
+          stylist.state <- Text.set next_x next_y state stylist.state;
+          let character =
+            match Text.get next_x next_y text with
+              | None ->
+                  assert false (* We just checked the position above. *)
+              | Some character ->
+                  character
+          in
+          feed_stylist_with_character old_state character (next_x + 1) next_y
+        )
+
+  in
+  match status with
+    | Up_to_date ->
+        Up_to_date
+    | Search_beginning { next_x; next_y; end_x; end_y } ->
+        search_beginning 0 next_x next_y end_x end_y
+    | Parse { start_x; start_y; state; next_x; next_y; end_x; end_y } ->
+        parse_forwards 0 start_x start_y state next_x next_y end_x end_y
+
+let rec update_style view =
+  match view.stylist with
+    | None ->
+        ()
+    | Some (Stylist stylist) ->
+        stylist.status <- update_style_from_status view stylist stylist.status;
+        match stylist.status with
+          | Up_to_date ->
+              ()
+          | _ ->
+              match stylist.group with
+                | None ->
+                    let group = Spawn.group () in
+                    stylist.group <- Some group;
+                    Spawn.task ~group @@ fun () ->
+                    Spawn.kill group;
+                    stylist.group <- None;
+                    update_style view
+                | Some _ ->
+                    ()
+
+let set_stylist_module view stylist_module =
+  (* Kill old stylist. *)
+  (
+    match view.stylist with
+      | None ->
+          ()
+      | Some (Stylist stylist) ->
+          match stylist.group with
+            | None ->
+                ()
+            | Some group ->
+                Spawn.kill group;
+                stylist.group <- None
+  );
+
+  (* Replace by new stylist. *)
+  match stylist_module with
+    | None ->
+        (* TODO: reset style to default? (But incrementally.) *)
+        view.stylist <- None
+    | Some stylist_module ->
+        let text = view.file.text in
+        let last_line = Text.get_line_count text - 1 in
+        let stylist =
+          {
+            stylist_module;
+            state = Text.map (fun _ -> stylist_module.start) text;
+            status =
+              Parse {
+                start_x = 0;
+                start_y = 0;
+                state = stylist_module.start;
+                next_x = 0;
+                next_y = 0;
+                end_x = Text.get_line_length last_line text;
+                end_y = last_line;
+              };
+            group = None;
+          }
+        in
+        view.stylist <- Some (Stylist stylist);
+        update_style view
 
 (* Move marks after text has been inserted.
 
@@ -279,17 +574,80 @@ let update_marks_after_delete ~x ~y ~characters ~lines marks =
   in
   List.iter move_mark marks
 
+(* Update the range that a stylist must update, to include the given range. *)
+let update_stylist_range ~x1 ~y1 ~x2 ~y2 view =
+  match view.stylist with
+    | None ->
+        ()
+    | Some (Stylist stylist) ->
+        match stylist.status with
+          | Up_to_date ->
+              (* Start running stylist in background. *)
+              stylist.status <-
+                Search_beginning {
+                  next_x = x1;
+                  next_y = y1;
+                  end_x = x2;
+                  end_y = y2;
+                };
+              update_style view
+
+          | Search_beginning { next_x = old_x1; next_y = old_y1; end_x = old_x2; end_y = old_y2 }
+          | Parse { start_x = old_x1; start_y = old_y1; end_x = old_x2; end_y = old_y2 } ->
+              let xy1 = { x = x1; y = y1 } in
+              let xy2 = { x = x2; y = y2 } in
+              let old_xy1 = { x = old_x1; y = old_y1 } in
+              let old_xy2 = { x = old_x2; y = old_y2 } in
+              let new_xy1 = if xy1 <% old_xy1 then xy1 else old_xy1 in
+              let new_xy2 = if xy2 <% old_xy2 then old_xy2 else xy2 in
+              stylist.status <-
+                Search_beginning {
+                  next_x = new_xy1.x;
+                  next_y = new_xy1.y;
+                  end_x = new_xy2.x;
+                  end_y = new_xy2.y;
+                }
+
 let update_views_after_insert ~x ~y ~characters ~lines views =
+  (* Prepare a chunk of default style to insert. *)
   let style_sub =
     match views with
       | [] ->
           Text.empty
       | view :: _ ->
-          Text.map (fun _ -> Style.default) (Text.sub_region ~x ~y ~characters ~lines view.file.text)
+          let sub_region = Text.sub_region ~x ~y ~characters ~lines view.file.text in
+          Text.map (fun _ -> Style.default) sub_region
   in
+
+  (* Compute the position of the last character which was inserted. *)
+  let x2 =
+    if lines = 0 then
+      x + characters - 1
+    else
+      characters - 1
+  in
+  let y2 = y + lines in
+
+  (* Update all views. *)
   let update_view view =
     update_marks_after_insert ~x ~y ~characters ~lines view.marks;
     view.style <- Text.insert_text ~x ~y ~sub: style_sub view.style;
+    (
+      match view.stylist with
+        | None ->
+            ()
+        | Some (Stylist stylist) ->
+            let stylist_state_sub =
+              match views with
+                | [] ->
+                    Text.empty
+                | view :: _ ->
+                    let start = stylist.stylist_module.start in
+                    Text.map (fun _ -> start) style_sub
+            in
+            stylist.state <- Text.insert_text ~x ~y ~sub: stylist_state_sub stylist.state
+    );
+    update_stylist_range ~x1: x ~y1: y ~x2 ~y2 view;
   in
   List.iter update_view views
 
@@ -297,6 +655,16 @@ let update_views_after_delete ~x ~y ~characters ~lines views =
   let update_view view =
     update_marks_after_delete ~x ~y ~characters ~lines view.marks;
     view.style <- Text.delete_region ~x ~y ~characters ~lines view.style;
+    (
+      match view.stylist with
+        | None ->
+            ()
+        | Some (Stylist stylist) ->
+            stylist.state <- Text.delete_region ~x ~y ~characters ~lines stylist.state
+    );
+    (* TODO: we could optimize by reducing the "need to update" region by the region which was deleted
+       if those two regions intersects. *)
+    update_stylist_range ~x1: x ~y1: y ~x2: x ~y2: y view;
   in
   List.iter update_view views
 
@@ -361,6 +729,15 @@ let create_cursor x y =
     clipboard = { text = Text.empty };
   }
 
+(* TODO: different stylists for each views *)
+let ocaml_stylist =
+  {
+    equivalent = Ocaml.Stylist.equivalent;
+    start = Ocaml.Stylist.start;
+    add_char = Ocaml.Stylist.add_char;
+    end_of_file = Ocaml.Stylist.end_of_file;
+  }
+
 let create_view kind file =
   let cursor = create_cursor 0 0 in
   let view =
@@ -374,9 +751,11 @@ let create_view kind file =
       marks = [ cursor.selection_start; cursor.position ];
       cursors = [ cursor ];
       style = Text.map (fun _ -> Style.default) file.text;
+      stylist = None;
     }
   in
   file.views <- view :: file.views;
+  set_stylist_module view (Some ocaml_stylist);
   view
 
 (* You may want to use [State.create_file] instead. *)
@@ -396,6 +775,7 @@ let create name text =
     open_file_descriptors = [];
   }
 
+(* Note: this does not kill stylists. *)
 let kill_spawn_group file =
   match file.spawn_group with
     | None ->
@@ -426,7 +806,8 @@ let reset file =
   let cursor = create_cursor 0 0 in
   view.marks <- [ cursor.selection_start; cursor.position ];
   view.cursors <- [ cursor ];
-  view.style <- Text.empty
+  view.style <- Text.empty;
+  set_stylist_module view None
 
 let create_spawn_group file =
   kill_spawn_group file;
@@ -461,12 +842,14 @@ let load file filename =
           if len = 0 then
             (* TODO: [Text.of_utf8_substrings_offset_0] can block for a while.
                Replace it by some kind of iterative parser. *)
-            let text = Text.of_utf8_substrings_offset_0 (List.rev sub_strings_rev) in
-            file.text <- text;
-            let style = Text.map (fun _ -> Style.default) text in
-            foreach_view file (fun view -> view.style <- style);
-            close_file_descriptor file file_descr;
-            file.loading <- No
+            (
+              close_file_descriptor file file_descr;
+              let text = Text.of_utf8_substrings_offset_0 (List.rev sub_strings_rev) in
+              file.text <- text;
+              let style = Text.map (fun _ -> Style.default) text in
+              foreach_view file (fun view -> view.style <- style; set_stylist_module view (Some ocaml_stylist));
+              file.loading <- No
+            )
           else
             let sub_strings_rev = (Bytes.unsafe_to_string bytes, len) :: sub_strings_rev in
             file.loading <- File { loaded = loaded + len; size; sub_strings_rev };
@@ -577,6 +960,19 @@ let make_undo file =
       undo_scroll_y = view.scroll_y;
       undo_marks = List.map make_undo_mark view.marks;
       undo_style = view.style;
+      undo_stylist = (
+        match view.stylist with
+          | None ->
+              None
+          | Some (Stylist stylist) ->
+              Some (
+                Undo_stylist {
+                  undo_stylist_module = stylist.stylist_module;
+                  undo_state = stylist.state;
+                  undo_status = stylist.status;
+                }
+              )
+      );
     }
   in
   {
@@ -780,6 +1176,22 @@ let restore_undo_point file undo =
     undo.undo_view.scroll_y <- undo.undo_scroll_y;
     List.iter restore_mark undo.undo_marks;
     undo.undo_view.style <- undo.undo_style;
+    undo.undo_view.stylist <- (
+      match undo.undo_stylist with
+        | None ->
+            None
+        | Some (Undo_stylist undo_stylist) ->
+            Some
+              (
+                Stylist {
+                  stylist_module = undo_stylist.undo_stylist_module;
+                  state = undo_stylist.undo_state;
+                  status = undo_stylist.undo_status;
+                  group = None;
+                }
+              )
+    );
+    update_style undo.undo_view;
   in
   List.iter restore_view undo.undo_views
 

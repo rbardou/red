@@ -70,6 +70,21 @@ val iter: ('a -> unit) -> 'a t -> unit
 (** Apply a function to all values. *)
 val map: ('a -> 'b) -> 'a t -> 'b t
 
+(** Apply a function to a range of values.
+
+    Usage: [map_sub first last]. *)
+val map_sub: int -> int -> ('a -> 'a) -> 'a t -> 'a t
+
+(** Apply a function until a given character.
+
+    Usage: [map_left last]. *)
+val map_until: int -> ('a -> 'a) -> 'a t -> 'a t
+
+(** Apply a function from a given character.
+
+    Usage: [map_left first]. *)
+val map_from: int -> ('a -> 'a) -> 'a t -> 'a t
+
 (** Fold over values in index order. *)
 val fold: ('a -> 'b -> 'a) -> 'a -> 'b t -> 'a
 
