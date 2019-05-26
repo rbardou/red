@@ -1,13 +1,16 @@
 open Misc
 
+module H = State.Help_maker
+
 let commands: State.command_definitions ref = ref String_map.empty
 
-let define name (run: State.t -> unit) =
-  commands := String_map.add name ({ name; run }: State.command) !commands
+let define name ?help (run: State.t -> unit) =
+  commands := String_map.add name ({ name; help; run }: State.command) !commands
 
 let noop: State.command =
   {
     name = "noop";
+    help = Some (fun { add } -> add "Do nothing.");
     run = fun _ -> ();
   }
 
@@ -403,13 +406,37 @@ let choose_from_file_system ?default (prompt: string) (state: State.t) (validate
   in
   browse ?default (append_dir_sep_if_needed starting_directory)
 
+let display_help (state: State.t) (text, style, links) =
+  (* Create help panel. *)
+  let help_panel =
+    let file = File.create ~read_only: true "help" text in
+    let initial_layout = state.layout in
+    let initial_focus = state.focus in
+    let restore () =
+      State.set_layout state initial_layout;
+      State.set_focus state initial_focus;
+    in
+    let view = File.create_view (Help { restore; links }) file in
+    view.style <- style;
+    Panel.create view
+  in
+
+  (* Replace layout. *)
+  State.set_layout state (Layout.single help_panel);
+  State.set_focus state help_panel
+
 (******************************************************************************)
 (*                                 Definitions                                *)
 (******************************************************************************)
 
-let () = define noop.name noop.run
+let () = define noop.name ?help: noop.help noop.run
 
-let () = define "quit" @@ fun state ->
+let help { H.line; par } =
+  line "Exit the editor.";
+  par ();
+  line "Prompt for confirmation if there are modified files."
+
+let () = define "quit" ~help @@ fun state ->
   let modified_files = List.filter (fun (file: File.t) -> file.modified) state.files in
   let modified_file_count = List.length modified_files in
   if modified_file_count = 0 then
@@ -424,27 +451,43 @@ let () = define "quit" @@ fun state ->
     prompt_confirmation ~global: true message state @@ fun () ->
     raise State.Exit
 
-let () = define "help" @@ fun state ->
-  (* Create help panel. *)
-  let help_panel =
-    let text, style = Help.make !commands state in
-    let file = File.create ~read_only: true "help" text in
-    let initial_layout = state.layout in
-    let initial_focus = state.focus in
-    let restore () =
-      State.set_layout state initial_layout;
-      State.set_focus state initial_focus;
-    in
-    let view = File.create_view (Help { restore }) file in
-    view.style <- style;
-    Panel.create view
-  in
+let help { H.line; par } =
+  line "Open help.";
+  par ();
+  line "This opens the list of key bindings, and you can navigate to other help pages";
+  line "from here.";
+  par ();
+  line "Press Q to go back to what you were doing."
 
-  (* Replace layout. *)
-  State.set_layout state (Layout.single help_panel);
-  State.set_focus state help_panel
+let () = define "help" ~help @@ fun state ->
+  display_help state (Help.bindings !commands state)
 
-let () = define "cancel" @@ fun state ->
+let help { H.line } =
+  line "Follow a link to another help page to get more information."
+
+let () = define "follow_link" ~help @@ fun state ->
+  let view = state.focus.view in
+  match view.kind with
+    | Help { links } ->
+        File.if_only_one_cursor view @@ fun cursor ->
+        (
+          match Text.get cursor.position.x cursor.position.y links with
+            | None | Some HL_none ->
+                ()
+            | Some (HL_command name) ->
+                match String_map.find name !commands with
+                  | exception Not_found ->
+                      ()
+                  | command ->
+                      display_help state (Help.command command state)
+        )
+    | _ ->
+        ()
+
+let help { H.line } =
+  line "Exit a prompt to go back to what you were doing."
+
+let () = define "cancel" ~help @@ fun state ->
   match state.focus.view.kind with
     | Help { restore } ->
         (* TODO: if initial layout contains panels which view files which were killed, they need to change view. *)
@@ -457,7 +500,13 @@ let () = define "cancel" @@ fun state ->
     | _ ->
         ()
 
-let () = define "save" @@ fun state ->
+let help { H.line; par; see_also } =
+  line "Save file.";
+  par ();
+  line "If current file has no name, prompt for a filename.";
+  see_also [ HL_command "save_as" ]
+
+let () = define "save" ~help @@ fun state ->
   let file_to_save = state.focus.view.file in
   match file_to_save.filename with
     | None ->
@@ -465,11 +514,24 @@ let () = define "save" @@ fun state ->
     | Some filename ->
         save file_to_save filename
 
-let () = define "save_as" @@ fun state ->
+let help { H.line; par; see_also } =
+  line "Save file.";
+  par ();
+  line "Prompt for a filename even if current file already has one.";
+  line "Existing file is not deleted.";
+  see_also [ HL_command "save" ]
+
+let () = define "save_as" ~help @@ fun state ->
   let file_to_save = state.focus.view.file in
   choose_from_file_system ?default: file_to_save.filename "Save as: " state (save file_to_save)
 
-let () = define "open" @@ fun state ->
+let help { H.line; par; see_also } =
+  line "Open a file in the current panel.";
+  par ();
+  line "Prompt for the filename to open.";
+  see_also [ HL_command "new"; HL_command "switch_file" ]
+
+let () = define "open" ~help @@ fun state ->
   let panel = state.focus in
   choose_from_file_system "Open: " state @@ fun filename ->
   if not (System.file_exists filename) then abort "file does not exist: %S" filename;
@@ -477,16 +539,56 @@ let () = define "open" @@ fun state ->
   let view = File.create_view File file in
   panel.view <- view
 
-let () = define "new" @@ fun state ->
+let help { H.line; par; see_also } =
+  line "Create a new empty file.";
+  par ();
+  line "The file is not actually created on disk until you save.";
+  see_also [ HL_command "open"; HL_command "switch_file" ]
+
+let () = define "new" ~help @@ fun state ->
   let panel = state.focus in
   let file = State.create_file state "(new file)" Text.empty in
   let view = File.create_view File file in
   panel.view <- view
 
+let help { H.line } =
+  line "Remove current panel from current layout."
+
 let () = define "remove_panel" @@ fun state -> State.remove_panel state.focus state
 
-let () = define "move_right" @@ move true false move_right
-let () = define "move_left" @@ move true false move_left
+let help { H.line; par; see_also } =
+  line "Move cursor to the right.";
+  par ();
+  line "All cursors move one character to the right.";
+  line "If there is no character to the right in the current line,";
+  line "move to the beginning of the next line instead;";
+  line "if there is no next line, don't move at all.";
+  par ();
+  line "Reset selection and preferred column.";
+  see_also [
+    HL_command "move_left"; HL_command "move_down"; HL_command "move_up";
+    HL_command "select_right"; HL_command "move_end_of_line"; HL_command "move_right_word";
+  ]
+
+let () = define "move_right" ~help @@ move true false move_right
+
+let help { H.line; par; see_also } =
+  line "Move cursor to the left.";
+  par ();
+  line "All cursors move one character to the left.";
+  line "If there is no character to the left in the current line,";
+  line "move to the end of the previous line instead;";
+  line "if there is no previous line, don't move at all.";
+  par ();
+  line "Reset selection and preferred column.";
+  see_also [
+    HL_command "move_right"; HL_command "move_down"; HL_command "move_up";
+    HL_command "select_left"; HL_command "move_beginning_of_line"; HL_command "move_left_word";
+  ]
+
+let () = define "move_left" ~help @@ move true false move_left
+
+(* TODO: help for the following commands *)
 let () = define "move_down" @@ move true true move_down
 let () = define "move_up" @@ move true true move_up
 let () = define "move_end_of_line" @@ move true false move_end_of_line
@@ -498,6 +600,7 @@ let () = define "move_left_word" @@ move true false move_left_word
 let () = define "move_down_paragraph" @@ move true false move_down_paragraph
 let () = define "move_up_paragraph" @@ move true false move_up_paragraph
 
+(* TODO: help for the following commands *)
 let () = define "select_right" @@ move false false move_right
 let () = define "select_left" @@ move false false move_left
 let () = define "select_down" @@ move false true move_down
@@ -511,8 +614,24 @@ let () = define "select_left_word" @@ move false false move_left_word
 let () = define "select_down_paragraph" @@ move false false move_down_paragraph
 let () = define "select_up_paragraph" @@ move false false move_up_paragraph
 
-let () = define "select_all" @@ fun state ->
+let help { H.line; par; see_also } =
+  line "Select all text.";
+  par ();
+  line "Set selection of all cursors to start at the beginning of the file.";
+  line "Set position of all cursors to the end of the file.";
+  line "Reset preferred column.";
+  see_also [
+    HL_command "select_right";
+    HL_command "select_end_of_line";
+    HL_command "select_end_of_file";
+    HL_command "select_right_word";
+    HL_command "select_down_paragraph";
+  ]
+
+let () = define "select_all" ~help @@ fun state ->
   select_all state.focus.view
+
+(* TODO: help for all commands below *)
 
 let () = define "focus_right" @@ focus_relative Layout.get_panel_right
 let () = define "focus_left" @@ focus_relative Layout.get_panel_left
@@ -673,6 +792,12 @@ let () = define "execute_process" @@ fun state ->
         let file = State.create_file state ("<" ^ command ^ ">") Text.empty in
         panel.view <- File.create_view File file;
         File.create_process file program arguments
+
+let help { H.line; par; see_also } =
+  line "Switch to another already-opened file.";
+  par ();
+  line "Prompt for the filename to switch to.";
+  see_also [ HL_command "new"; HL_command "open" ]
 
 let () = define "switch_file" @@ fun state ->
   let panel = state.focus in

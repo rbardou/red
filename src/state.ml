@@ -23,9 +23,24 @@ end
 
 module Context_map = Map.Make (Context)
 
+module Help_maker =
+struct
+  type t =
+    {
+      add: ?style: Style.t -> ?link: File.help_link -> string -> unit;
+      nl: unit -> unit;
+      line: ?style: Style.t -> ?link: File.help_link -> string -> unit;
+      par: unit -> unit;
+      header: string -> unit;
+      add_command: string -> unit;
+      see_also: File.help_link list -> unit;
+    }
+end
+
 type command =
   {
     name: string;
+    help: (Help_maker.t -> unit) option;
     run: t -> unit;
   }
 

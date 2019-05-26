@@ -112,6 +112,11 @@ type 'state stylist =
 
 type packed_stylist = Stylist: 'a stylist -> packed_stylist
 
+type help_link =
+  | HL_none
+  | HL_command of string
+  (* TODO: HL_topic of string *)
+
 type t =
   {
     mutable views: view list;
@@ -193,6 +198,7 @@ and choice =
 and help =
   {
     restore: unit -> unit;
+    links: help_link Text.t;
   }
 
 and view_kind =

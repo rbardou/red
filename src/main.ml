@@ -125,6 +125,7 @@ let main () =
 
   Ctrl_g => "cancel";
   Letter_q => "cancel";
+  Return => "follow_link";
 
   Term_run.run_raw_mode
     ~on_key_press: (State.on_key_press state)
