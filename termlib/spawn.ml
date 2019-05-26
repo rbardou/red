@@ -69,7 +69,7 @@ let run_task task =
   task.run ();
   current_group := old_group
 
-let run_once () =
+let run_once ?(on_wait = fun () -> ()) () =
   let now = Unix.gettimeofday () in
 
   (* Clear the list of tasks.
@@ -138,6 +138,7 @@ let run_once () =
   let pending_writes = !pending_writes in
 
   (* Wait as needed until some file descriptors are ready. *)
+  on_wait ();
   let ready_to_read, ready_to_write, _ =
     if
       not (File_descr_map.is_empty pending_reads) ||
@@ -179,11 +180,10 @@ let run_once () =
       !tasks;
     ]
 
-let rec run ?(on_iterate = fun () -> ()) () =
+let rec run ?on_wait () =
   match !tasks with
     | [] ->
         ()
     | _ :: _ ->
-        on_iterate ();
-        run_once ();
-        run ~on_iterate ()
+        run_once ?on_wait ();
+        run ?on_wait ()

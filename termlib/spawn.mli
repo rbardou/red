@@ -56,8 +56,11 @@ val on_write: ?group: group -> Unix.file_descr -> (unit -> unit) -> unit
 (** Run one iteration of the scheduler.
 
     The scheduler does not catch exceptions. If an exception is raised by a task, this may cause
-    other tasks to be arbitrarily killed, so you should stop the program immediately. *)
-val run_once: unit -> unit
+    other tasks to be arbitrarily killed, so you should stop the program immediately.
+
+    [on_wait] is called after tasks which could be run immediately have been run,
+    i.e. just before waiting on file descriptors. It is called even if there is nothing to wait for. *)
+val run_once: ?on_wait: (unit -> unit) -> unit -> unit
 
 (** Run the scheduler until there is no pending task. *)
-val run: ?on_iterate: (unit -> unit) -> unit -> unit
+val run: ?on_wait: (unit -> unit) -> unit -> unit

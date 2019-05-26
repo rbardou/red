@@ -21,10 +21,12 @@ struct
     | Comment_parenthesis of int
     | Comment_end
 
-    | Char
+    | Quote
     | Char_backslash
+    | Quote_type_variable_char
     | Char_char
     | Char_end
+    | Type_variable
 
     | String
     | String_backslash
@@ -55,10 +57,12 @@ struct
       | Comment_star n -> "Comment_star " ^ string_of_int n
       | Comment_parenthesis n -> "Comment_parenthesis " ^ string_of_int n
       | Comment_end -> "Comment_end"
-      | Char -> "Char"
+      | Quote -> "Quote"
       | Char_backslash -> "Char_backslash"
+      | Quote_type_variable_char -> "Quote_type_variable_char"
       | Char_char -> "Char_char"
       | Char_end -> "Char_end"
+      | Type_variable -> "Type_variable"
       | String -> "String"
       | String_backslash -> "String_backslash"
       | String_backslash_digit -> "String_backslash_digit"
@@ -67,18 +71,21 @@ struct
       | String_backslash_end -> "String_backslash_end"
       | String_end -> "String_end"
 
+  let literal = Style.make ~fg: Cyan ()
+
   let other = Style.make ~fg: Yellow ()
-  let invalid = Style.make ~bg: Red ~fg: Black ()
-  let keyword = Style.bold ~fg: Yellow ()
+  let invalid = Style.make ~fg: Red ()
+  let keyword = Style.make ~fg: Magenta ()
   let identifier = Style.default
-  let constructor = Style.bold ()
-  let module_ = Style.bold ~fg: Blue ()
-  let integer = Style.make ~fg: Blue ()
-  let float = Style.make ~fg: Cyan ()
+  let constructor = Style.default
+  let module_ = Style.make ~fg: Blue ()
+  let integer = literal
+  let float = literal
   let comment = Style.make ~fg: Green ()
-  let char = Style.make ~fg: Magenta ()
-  let string = Style.make ~fg: Magenta ()
-  let string_escaped = Style.make ~fg: Black ~bg: Magenta ()
+  let char = literal
+  let string = literal
+  let string_escaped = Style.make ~fg: Blue ()
+  let type_variable = Style.make ~fg: Blue ()
 
   let style state =
     match state with
@@ -87,8 +94,12 @@ struct
       | Identifier chars ->
           (
             match String.concat "" (List.map (String.make 1) (List.rev chars)) with
-              | "let" | "in" | "match" | "with" | "if" | "then" | "else" | "begin" | "end" | "module" | "struct"
-              | "sig" | "type" | "while" | "do" | "done" | "for" | "to" ->
+              | "and" | "as" | "assert" | "begin" | "class" | "constraint" | "do" | "done" | "downto"
+              | "else" | "end" | "exception" | "external" | "false" | "for" | "fun" | "function" | "functor"
+              | "if" | "in" | "include" | "inherit" | "initializer" | "lazy" | "let" | "match" | "method"
+              | "module" | "mutable" | "new" | "nonrec" | "object" | "of" | "open" | "or" | "private"
+              | "rec" | "sig" | "struct" | "then" | "to" | "true" | "try" | "type" | "val" | "virtual"
+              | "when" | "while" | "with" | "lor" | "lxor" | "mod" | "land" | "lsl" | "lsr" | "asr" ->
                   keyword
               | _ ->
                   identifier
@@ -105,10 +116,12 @@ struct
       | Comment_star _ -> invalid
       | Comment_parenthesis _ -> invalid
       | Comment_end -> comment
-      | Char -> invalid
+      | Quote -> invalid
       | Char_backslash -> invalid
+      | Quote_type_variable_char -> type_variable
       | Char_char -> invalid
       | Char_end -> char
+      | Type_variable -> type_variable
       | String -> string
       | String_backslash -> invalid
       | String_backslash_digit -> invalid
@@ -126,9 +139,9 @@ struct
     else
       match state, character.[0] with
 
-        | Identifier chars, ('a'..'z' | 'A'..'Z' | '_' as char) ->
+        | Identifier chars, ('a'..'z' | 'A'..'Z' | '0'..'9' | '_' as char) ->
             continue (Identifier (char :: chars))
-        | Uppercase_identifier chars, ('a'..'z' | 'A'..'Z' | '_' as char) ->
+        | Uppercase_identifier chars, ('a'..'z' | 'A'..'Z' | '0'..'9' | '_' as char) ->
             continue (Uppercase_identifier (char :: chars))
         | Uppercase_identifier chars, '.' ->
             continue Module
@@ -149,12 +162,15 @@ struct
         | Comment_parenthesis depth, '*' -> continue (Comment (depth + 1))
         | Comment_star 0, ')' -> continue Comment_end
         | Comment_star depth, ')' -> continue (Comment (depth - 1))
-        | (Comment_star _ | Comment_parenthesis _), _ -> continue state
+        | (Comment_star depth | Comment_parenthesis depth), _ -> continue (Comment depth)
 
-        | Char, '\\' -> continue Char_backslash
-        | (Char | Char_backslash), _ -> continue Char_char
-        | Char_char, '\'' -> continue Char_end
+        | Quote, '\\' -> continue Char_backslash
+        | Quote, ('a'..'z' | 'A'..'Z') -> continue Quote_type_variable_char
+        | Quote, _ -> continue Char_char
+        | (Quote_type_variable_char | Char_char), '\'' -> continue Char_end
         | Char_char, _ -> continue Invalid
+        | Char_backslash, _ -> continue Char_char
+        | (Quote_type_variable_char | Type_variable), ('a'..'z' | 'A'..'Z' | '_') -> continue Type_variable
 
         | String, '"' -> continue String_end
         | String_backslash_end, '"' -> start String_end
@@ -173,12 +189,13 @@ struct
         | _, ('-' | '+') -> start Sign
         | _, ('0'..'9') -> start Integer
         | _, '(' -> start Parenthesis
-        | _, '\'' -> start Char
+        | _, '\'' -> start Quote
         | _, '"' -> start String
 
         | (Other | Invalid), _ -> continue Other
         | (Identifier _ | Sign | Integer | Float | Float_exponent_digits | Parenthesis
-          | Comment_end | String_end | Char_end | Uppercase_identifier _ | Module), _ ->
+          | Comment_end | String_end | Char_end | Uppercase_identifier _ | Module | Quote_type_variable_char
+          | Type_variable), _ ->
             start Other
 
   let end_of_file (type a) state: Style.t =
@@ -186,53 +203,53 @@ struct
 
 end
 
-let test verbose string =
-  let set_style start index (style: Style.t) =
-    Term.fg_color style.fg;
-    Term.bg_color style.bg;
-    Term.intensity style.intensity;
-    if style.underline then Term.underline true;
-    print_string (String.sub string start (index - start));
-    Term.reset_style ()
-  in
-  let rec loop start index state =
-    if verbose then print_endline ("State: " ^ Stylist.show state);
-    if index >= String.length string then
-      (
-        set_style start index (Stylist.end_of_file state);
-        if verbose then (
-          print_newline ();
-          print_endline ("Final state: " ^ Stylist.show state);
-        );
-      )
-    else
-      let continue state = loop start (index + 1) state in
-      let start style state = set_style start index style; loop index (index + 1) state in
-      if verbose then Printf.printf "Char: %C\n" string.[index];
-      Stylist.add_char (String.make 1 string.[index]) state continue start
-  in
-  loop 0 0 Stylist.start
+(* let test verbose string = *)
+(*   let set_style start index (style: Style.t) = *)
+(*     Term.fg_color style.fg; *)
+(*     Term.bg_color style.bg; *)
+(*     Term.intensity style.intensity; *)
+(*     if style.underline then Term.underline true; *)
+(*     print_string (String.sub string start (index - start)); *)
+(*     Term.reset_style () *)
+(*   in *)
+(*   let rec loop start index state = *)
+(*     if verbose then print_endline ("State: " ^ Stylist.show state); *)
+(*     if index >= String.length string then *)
+(*       ( *)
+(*         set_style start index (Stylist.end_of_file state); *)
+(*         if verbose then ( *)
+(*           print_newline (); *)
+(*           print_endline ("Final state: " ^ Stylist.show state); *)
+(*         ); *)
+(*       ) *)
+(*     else *)
+(*       let continue state = loop start (index + 1) state in *)
+(*       let start style state = set_style start index style; loop index (index + 1) state in *)
+(*       if verbose then Printf.printf "Char: %C\n" string.[index]; *)
+(*       Stylist.add_char (String.make 1 string.[index]) state continue start *)
+(*   in *)
+(*   loop 0 0 Stylist.start *)
 
-let () =
-  test false "\
-let x = 42 in \"pl\\nop\"
-let char = 'a' or '\\''
-let int = 42 + -12
-(* floats can have various forms (* and comments can be nested *) *)
-let float = -12. or 5.17 or 5.18e28 or 1_000.e10_000
+(* let () = *)
+(*   test false "\ *)
+(* let x = 42 in \"pl\\nop\" *)
+(* let char = 'a' or '\\'' *)
+(* let int = 42 + -12 *)
+(* (\* floats can have various forms (\* and comments can be nested *\) *\) *)
+(* let float = -12. or 5.17 or 5.18e28 or 1_000.e10_000 *)
 
-for i = 0 to 42 do
-  Printf.printf \"i = %d\" i
-done;
+(* for i = 0 to 42 do *)
+(*   Printf.printf \"i = %d\" i *)
+(* done; *)
 
-match color with
-  | Red -> \"Red\"
-  | Green -> \"Green\"
-  | Blue -> \"Blue\"
+(* match color with *)
+(*   | Red -> \"Red\" *)
+(*   | Green -> \"Green\" *)
+(*   | Blue -> \"Blue\" *)
 
-\"strings can contain escaped octal \\100 but they must \\10 be \\1 terminated
-they can be multiline
-and they can contain double quotes \\\" which do not end the string\"
+(* \"strings can contain escaped octal \\100 but they must \\10 be \\1 terminated *)
+(* they can be multiline *)
+(* and they can contain double quotes \\\" which do not end the string\" *)
 
-(* comments must be terminated *) (* especially (* nested *) *
-"
+(* (\* comments must be terminated *\) (\* especially (\* nested *\) * *)
+(* " *)

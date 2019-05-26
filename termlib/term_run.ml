@@ -62,7 +62,7 @@ let run_raw_mode
     ();
 
   let previous_frame = ref None in
-  let on_iterate () =
+  let on_wait () =
     if Term.size_changed () then on_size_changed ();
     (* TODO: if we already rendered something less than, say, 1ms ago, do not render again;
        instead, and only there isn't one already, spawn a thread which will render a little later. *)
@@ -74,4 +74,4 @@ let run_raw_mode
     previous_frame := Some new_frame
   in
 
-  Spawn.run ~on_iterate ()
+  Spawn.run ~on_wait ()
