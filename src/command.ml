@@ -588,31 +588,199 @@ let help { H.line; par; see_also } =
 
 let () = define "move_left" ~help @@ move true false move_left
 
-(* TODO: help for the following commands *)
-let () = define "move_down" @@ move true true move_down
-let () = define "move_up" @@ move true true move_up
-let () = define "move_end_of_line" @@ move true false move_end_of_line
-let () = define "move_beginning_of_line" @@ move true false move_beginning_of_line
-let () = define "move_end_of_file" @@ move true false move_end_of_file
-let () = define "move_beginning_of_file" @@ move true false move_beginning_of_file
-let () = define "move_right_word" @@ move true false move_right_word
-let () = define "move_left_word" @@ move true false move_left_word
-let () = define "move_down_paragraph" @@ move true false move_down_paragraph
-let () = define "move_up_paragraph" @@ move true false move_up_paragraph
+let help { H.line; par; see_also } =
+  line "Move cursor to the next line.";
+  par ();
+  line "All cursors move one line down.";
+  line "If there is no line below do nothing.";
+  line "Cursors move to their preferred column, or to the last character of the line";
+  line "if preferred column is after the end of the line.";
+  par ();
+  line "Reset selection.";
+  see_also [
+    HL_command "move_up"; HL_command "move_right"; HL_command "move_left";
+    HL_command "select_down"; HL_command "move_end_of_file"; HL_command "move_down_paragraph";
+  ]
 
-(* TODO: help for the following commands *)
-let () = define "select_right" @@ move false false move_right
-let () = define "select_left" @@ move false false move_left
-let () = define "select_down" @@ move false true move_down
-let () = define "select_up" @@ move false true move_up
-let () = define "select_end_of_line" @@ move false false move_end_of_line
-let () = define "select_beginning_of_line" @@ move false false move_beginning_of_line
-let () = define "select_end_of_file" @@ move false false move_end_of_file
-let () = define "select_beginning_of_file" @@ move false false move_beginning_of_file
-let () = define "select_right_word" @@ move false false move_right_word
-let () = define "select_left_word" @@ move false false move_left_word
-let () = define "select_down_paragraph" @@ move false false move_down_paragraph
-let () = define "select_up_paragraph" @@ move false false move_up_paragraph
+let () = define "move_down" ~help @@ move true true move_down
+
+let help { H.line; par; see_also } =
+  line "Move cursor to the previous line.";
+  par ();
+  line "All cursors move one line up.";
+  line "If there is no line above do nothing.";
+  line "Cursors move to their preferred column, or to the last character of the line";
+  line "if preferred column is after the end of the line.";
+  par ();
+  line "Reset selection.";
+  see_also [
+    HL_command "move_down"; HL_command "move_right"; HL_command "move_left";
+    HL_command "select_down"; HL_command "move_beginning_of_file"; HL_command "move_up_paragraph";
+  ]
+
+let () = define "move_up" ~help @@ move true true move_up
+
+let help { H.line; par; see_also } =
+  line "Move cursor to the end of the current line.";
+  par ();
+  line "All cursors move just after the character at the end of the current line.";
+  par ();
+  line "Reset selection and preferred column.";
+  see_also [
+    HL_command "move_right"; HL_command "select_end_of_line";
+    HL_command "move_beginning_of_line"; HL_command "move_end_of_file";
+  ]
+
+let () = define "move_end_of_line" ~help @@ move true false move_end_of_line
+
+let help { H.line; par; see_also } =
+  line "Move cursor to the beginning of the current line.";
+  par ();
+  line "All cursors move to the first character of the current line.";
+  par ();
+  line "Reset selection and preferred column.";
+  see_also [
+    HL_command "move_left"; HL_command "select_beginning_of_line";
+    HL_command "move_end_of_line"; HL_command "move_beginning_of_file";
+  ]
+
+let () = define "move_beginning_of_line" ~help @@ move true false move_beginning_of_line
+
+let help { H.line; par; see_also } =
+  line "Move cursor to the end of the current file.";
+  par ();
+  line "All cursors move just after the last character of the last line.";
+  par ();
+  line "Reset selection and preferred column.";
+  see_also [
+    HL_command "select_end_of_file"; HL_command "move_end_of_line"; HL_command "move_beginning_of_file";
+  ]
+
+let () = define "move_end_of_file" ~help @@ move true false move_end_of_file
+
+let help { H.line; par; see_also } =
+  line "Move cursor to the beginning of the current file.";
+  par ();
+  line "All cursors move to the first character of the first line.";
+  par ();
+  line "Reset selection and preferred column.";
+  see_also [
+    HL_command "select_beginning_of_file"; HL_command "move_beginning_of_line"; HL_command "move_end_of_file";
+  ]
+
+let () = define "move_beginning_of_file" ~help @@ move true false move_beginning_of_file
+
+let help { H.line; par; see_also } =
+  line "Move cursor to the end of the word.";
+  par ();
+  line "All cursors move to the first character after the current word,";
+  line "or of the next word if they are not in a word.";
+  par ();
+  line "A word is a sequence of letters or digits.";
+  par ();
+  line "Reset selection and preferred column.";
+  see_also [ HL_command "select_right_word"; HL_command "move_left_word" ]
+
+let () = define "move_right_word" ~help @@ move true false move_right_word
+
+let help { H.line; par; see_also } =
+  line "Move cursor to the beginning of the word.";
+  par ();
+  line "All cursors move to the first character of the current word,";
+  line "or of the previous word if they are not in a word.";
+  par ();
+  line "A word is a sequence of letters or digits.";
+  par ();
+  line "Reset selection and preferred column.";
+  see_also [ HL_command "select_left_word"; HL_command "move_right_word" ]
+
+let () = define "move_left_word" ~help @@ move true false move_left_word
+
+let help { H.line; par; see_also } =
+  line "Move cursor to the end of the paragraph.";
+  par ();
+  line "All cursors move to the first line after the current paragraph,";
+  line "or of the next paragraph if they are not in a paragraph.";
+  par ();
+  line "A paragraph is a sequence of non-empty lines.";
+  par ();
+  line "Reset selection.";
+  see_also [ HL_command "select_down_paragraph"; HL_command "move_up_paragraph" ]
+
+let () = define "move_down_paragraph" ~help @@ move true false move_down_paragraph
+
+let help { H.line; par; see_also } =
+  line "Move cursor to the beginning of the paragraph.";
+  par ();
+  line "All cursors move to the first line before the current paragraph,";
+  line "or of the previous paragraph if they are not in a paragraph.";
+  par ();
+  line "A paragraph is a sequence of non-empty lines.";
+  par ();
+  line "Reset selection.";
+  see_also [ HL_command "select_up_paragraph"; HL_command "move_down_paragraph" ]
+
+let () = define "move_up_paragraph" ~help @@ move true false move_up_paragraph
+
+let help { H.add; nl; add_command } =
+  add "Same as "; add_command "move_right"; add " but does not reset selection."; nl ()
+
+let () = define "select_right" ~help @@ move false false move_right
+
+let help { H.add; nl; add_command } =
+  add "Same as "; add_command "move_left"; add " but does not reset selection."; nl ()
+
+let () = define "select_left" ~help @@ move false false move_left
+
+let help { H.add; nl; add_command } =
+  add "Same as "; add_command "move_down"; add " but does not reset selection."; nl ()
+
+let () = define "select_down" ~help @@ move false true move_down
+
+let help { H.add; nl; add_command } =
+  add "Same as "; add_command "move_up"; add " but does not reset selection."; nl ()
+
+let () = define "select_up" ~help @@ move false true move_up
+
+let help { H.add; nl; add_command } =
+  add "Same as "; add_command "move_end_of_line"; add " but does not reset selection."; nl ()
+
+let () = define "select_end_of_line" ~help @@ move false false move_end_of_line
+
+let help { H.add; nl; add_command } =
+  add "Same as "; add_command "move_beginning_of_line"; add " but does not reset selection."; nl ()
+
+let () = define "select_beginning_of_line" ~help @@ move false false move_beginning_of_line
+
+let help { H.add; nl; add_command } =
+  add "Same as "; add_command "move_end_of_file"; add " but does not reset selection."; nl ()
+
+let () = define "select_end_of_file" ~help @@ move false false move_end_of_file
+
+let help { H.add; nl; add_command } =
+  add "Same as "; add_command "move_beginning_of_file"; add " but does not reset selection."; nl ()
+
+let () = define "select_beginning_of_file" ~help @@ move false false move_beginning_of_file
+
+let help { H.add; nl; add_command } =
+  add "Same as "; add_command "move_right_word"; add " but does not reset selection."; nl ()
+
+let () = define "select_right_word" ~help @@ move false false move_right_word
+
+let help { H.add; nl; add_command } =
+  add "Same as "; add_command "move_left_word"; add " but does not reset selection."; nl ()
+
+let () = define "select_left_word" ~help @@ move false false move_left_word
+
+let help { H.add; nl; add_command } =
+  add "Same as "; add_command "move_down_paragraph"; add " but does not reset selection."; nl ()
+
+let () = define "select_down_paragraph" ~help @@ move false false move_down_paragraph
+
+let help { H.add; nl; add_command } =
+  add "Same as "; add_command "move_up_paragraph"; add " but does not reset selection."; nl ()
+
+let () = define "select_up_paragraph" ~help @@ move false false move_up_paragraph
 
 let help { H.line; par; see_also } =
   line "Select all text.";
@@ -631,14 +799,51 @@ let help { H.line; par; see_also } =
 let () = define "select_all" ~help @@ fun state ->
   select_all state.focus.view
 
-(* TODO: help for all commands below *)
+let help { H.line; par; see_also } =
+  line "Give focus to the panel at the right of the current one.";
+  par ();
+  line "Commands which act on a view act on the view of the focused panel.";
+  line "Only one panel has focus at a given time.";
+  see_also [ HL_command "focus_left"; HL_command "focus_down"; HL_command "focus_up" ]
 
-let () = define "focus_right" @@ focus_relative Layout.get_panel_right
-let () = define "focus_left" @@ focus_relative Layout.get_panel_left
-let () = define "focus_down" @@ focus_relative Layout.get_panel_down
-let () = define "focus_up" @@ focus_relative Layout.get_panel_up
+let () = define "focus_right" ~help @@ focus_relative Layout.get_panel_right
 
-let () = define "scroll_down" @@ fun state ->
+let help { H.line; par; see_also } =
+  line "Give focus to the panel at the left of the current one.";
+  par ();
+  line "Commands which act on a view act on the view of the focused panel.";
+  line "Only one panel has focus at a given time.";
+  see_also [ HL_command "focus_right"; HL_command "focus_down"; HL_command "focus_up" ]
+
+let () = define "focus_left" ~help @@ focus_relative Layout.get_panel_left
+
+let help { H.line; par; see_also } =
+  line "Give focus to the panel below the current one.";
+  par ();
+  line "Commands which act on a view act on the view of the focused panel.";
+  line "Only one panel has focus at a given time.";
+  see_also [ HL_command "focus_right"; HL_command "focus_left"; HL_command "focus_up" ]
+
+let () = define "focus_down" ~help @@ focus_relative Layout.get_panel_down
+
+let help { H.line; par; see_also } =
+  line "Give focus to the panel above the current one.";
+  par ();
+  line "Commands which act on a view act on the view of the focused panel.";
+  line "Only one panel has focus at a given time.";
+  see_also [ HL_command "focus_right"; HL_command "focus_left"; HL_command "focus_down" ]
+
+let () = define "focus_up" ~help @@ focus_relative Layout.get_panel_up
+
+let help { H.line; par; see_also } =
+  line "Scroll half a page down.";
+  par ();
+  line "If there is only one cursor, also move it half a page down.";
+  line "It moves to its preferred column, or to the last character of the line";
+  line "if preferred column is after the end of the line.";
+  see_also [ HL_command "scroll_up" ]
+
+let () = define "scroll_down" ~help @@ fun state ->
   let view = state.focus.view in
   let text = view.file.text in
 
@@ -654,7 +859,15 @@ let () = define "scroll_down" @@ fun state ->
   (* Move cursor. *)
   move_after_scroll view old_scroll
 
-let () = define "scroll_up" @@ fun state ->
+let help { H.line; par; see_also } =
+  line "Scroll half a page up.";
+  par ();
+  line "If there is only one cursor, also move it half a page up.";
+  line "It moves to its preferred column, or to the last character of the line";
+  line "if preferred column is after the end of the line.";
+  see_also [ HL_command "scroll_down" ]
+
+let () = define "scroll_up" ~help @@ fun state ->
   let view = state.focus.view in
 
   (* Scroll. *)
@@ -664,22 +877,61 @@ let () = define "scroll_up" @@ fun state ->
   (* Move cursor. *)
   move_after_scroll view old_scroll
 
-let () = define "insert_new_line" @@ fun state ->
+let help { H.line; par; see_also } =
+  line "Split line at cursor.";
+  par ();
+  line "The end of the line moves to a new line below.";
+  line "Cursor moves to the beginning of this new line."
+
+let () = define "insert_new_line" ~help @@ fun state ->
   let view = state.focus.view in
   File.replace_selection_by_new_line view;
   File.recenter_if_needed view
 
-let () = define "delete_character" @@ fun state ->
+let help { H.line; par; see_also } =
+  line "Delete the next character.";
+  par ();
+  line "If cursor is at the end of a line, merge the next line instead.";
+  line "If selection is not empty, delete it instead.";
+  line "Reset preferred column.";
+  see_also [
+    HL_command "delete_character_backwards";
+    HL_command "delete_end_of_line";
+    HL_command "delete_end_of_word";
+  ]
+
+let () = define "delete_character" ~help @@ fun state ->
   let view = state.focus.view in
   File.delete_selection_or_character view;
   File.recenter_if_needed view
 
-let () = define "delete_character_backwards" @@ fun state ->
+let help { H.line; par; see_also } =
+  line "Delete the previous character.";
+  par ();
+  line "If cursor is at the beginning of a line, merge this line";
+  line "into the previous line instead.";
+  line "If selection is not empty, delete it instead.";
+  line "Reset preferred column.";
+  see_also [
+    HL_command "delete_character";
+    HL_command "delete_beginning_of_word";
+  ]
+
+let () = define "delete_character_backwards" ~help @@ fun state ->
   let view = state.focus.view in
   File.delete_selection_or_character_backwards view;
   File.recenter_if_needed view
 
-let () = define "delete_end_of_line" @@ fun state ->
+let help { H.line; par; see_also } =
+  line "Delete the end of the current line.";
+  par ();
+  line "If cursor is at the end of a line, merge the next line instead.";
+  see_also [
+    HL_command "delete_character";
+    HL_command "delete_end_of_word";
+  ]
+
+let () = define "delete_end_of_line" ~help @@ fun state ->
   let view = state.focus.view in
   (
     File.delete_from_cursors view @@ fun text cursor ->
@@ -694,7 +946,17 @@ let () = define "delete_end_of_line" @@ fun state ->
   );
   File.recenter_if_needed view
 
-let () = define "delete_end_of_word" @@ fun state ->
+let help { H.line; par; see_also } =
+  line "Delete the end of the current word.";
+  par ();
+  line "If cursor is not in a word, delete until the end of the next word.";
+  see_also [
+    HL_command "move_right_word";
+    HL_command "delete_character";
+    HL_command "delete_beginning_of_word";
+  ]
+
+let () = define "delete_end_of_word" ~help @@ fun state ->
   let view = state.focus.view in
   (
     File.delete_from_cursors view @@ fun text cursor ->
@@ -702,7 +964,17 @@ let () = define "delete_end_of_word" @@ fun state ->
   );
   File.recenter_if_needed view
 
-let () = define "delete_beginning_of_word" @@ fun state ->
+let help { H.line; par; see_also } =
+  line "Delete the beginning of the current word.";
+  par ();
+  line "If cursor is not in a word, delete until the beginning of the previous word.";
+  see_also [
+    HL_command "move_left_word";
+    HL_command "delete_character_backwards";
+    HL_command "delete_end_of_word";
+  ]
+
+let () = define "delete_beginning_of_word" ~help @@ fun state ->
   let view = state.focus.view in
   (
     File.delete_from_cursors view @@ fun text cursor ->
@@ -710,7 +982,23 @@ let () = define "delete_beginning_of_word" @@ fun state ->
   );
   File.recenter_if_needed view
 
-let () = define "create_cursors_from_selection" @@ fun state ->
+let help { H.add; line; nl; par; add_command } =
+  line "Create one cursor per selected line.";
+  par ();
+  line "If there are more than one cursor already, remove all cursors but one instead.";
+  par ();
+  add "Commands which apply to cursors, such as "; add_command "move_right_word";
+  add " or "; add_command "delete_word"; add ","; nl ();
+  line "are applied to all cursors.";
+  par ();
+  add "Clipboard commands, such as "; add_command "copy"; add " and "; add_command "paste";
+  add ", use the cursor clipboard instead"; nl ();
+  line "of the global clipboard. This means that you can have each cursor copy its";
+  line "own selection, and paste it somewhere else.";
+  par ();
+  add "Other commands, such as "; add_command "save_as"; add ", are only run once."; nl ()
+
+let () = define "create_cursors_from_selection" ~help @@ fun state ->
   let view = state.focus.view in
   match view.cursors with
     | [] ->
@@ -738,22 +1026,74 @@ let () = define "create_cursors_from_selection" @@ fun state ->
         let cursors = if reverse then List.rev cursors else cursors in
         File.set_cursors view cursors
 
-let () = define "copy" @@ fun state -> File.copy state.clipboard state.focus.view
+let help { H.add; line; nl; par; add_command; see_also } =
+  line "Copy selection to clipboard.";
+  par ();
+  line "If there is only one cursor, selection is copied to the global clipboard.";
+  line "It can be pasted from any view, in any file.";
+  par ();
+  add "If there are several cursor (see "; add_command "create_cursors_from_selection";
+  add "),"; nl ();
+  line "the selection of each cursor is copied to the local clipboard of each cursor.";
+  see_also [ HL_command "cut"; HL_command "paste" ]
 
-let () = define "cut" @@ fun state ->
+let () = define "copy" ~help @@ fun state -> File.copy state.clipboard state.focus.view
+
+let help { H.add; line; nl; par; add_command; see_also } =
+  line "Copy selection to clipboard, then delete selection.";
+  see_also [ HL_command "copy"; HL_command "paste" ]
+
+let () = define "cut" ~help @@ fun state ->
   let view = state.focus.view in
   File.cut state.clipboard view;
   File.recenter_if_needed view
 
-let () = define "paste" @@ fun state ->
+let help { H.add; line; nl; par; add_command; see_also } =
+  line "Paste from clipboard.";
+  par ();
+  line "Selection is deleted before pasting.";
+  par ();
+  line "If there is only one cursor, paste selection from the global clipboard.";
+  add "If there are several cursor (see "; add_command "create_cursors_from_selection";
+  add "),"; nl ();
+  line "for each cursor, paste the clipboard of this cursor at its position.";
+  see_also [ HL_command "cut"; HL_command "paste" ]
+
+let () = define "paste" ~help @@ fun state ->
   let view = state.focus.view in
   File.paste state.clipboard view;
   File.recenter_if_needed view
 
-let () = define "undo" @@ fun state -> File.undo state.focus.view.file
-let () = define "redo" @@ fun state -> File.redo state.focus.view.file
+let help { H.add; line; nl; par; add_command; see_also } =
+  line "Undo recent edits.";
+  par ();
+  line "You can undo repeatedly until the point where the current file was last saved.";
+  see_also [ HL_command "redo" ]
 
-let () = define "validate" @@ fun state ->
+let () = define "undo" ~help @@ fun state -> File.undo state.focus.view.file
+
+let help { H.add; line; nl; par; add_command; see_also } =
+  line "Redo what was recently undone.";
+  par ();
+  line "You can redo repeatedly until you come back to the point of the first undo";
+  line "of the last undo sequence.";
+  par ();
+  line "Any edit which is not a redo or an undo will remove the possibility to redo.";
+  see_also [ HL_command "undo" ]
+
+let () = define "redo" ~help @@ fun state -> File.redo state.focus.view.file
+
+let help { H.add; line; nl; par; add_command; see_also } =
+  line "Validate selected choice.";
+  par ();
+  add "In a prompt, such as the one which appears when you "; add_command "quit"; add ","; nl ();
+  line "validate the text you typed.";
+  par ();
+  add "In a list of choices, such as the one which appears when you "; add_command "save_as"; add ","; nl ();
+  line "validate selected choice. If you did not select anything,";
+  line "validate the text you typed instead."
+
+let () = define "validate" ~help @@ fun state ->
   let panel = state.focus in
   match panel.view.kind with
     | Prompt { validate } ->
@@ -772,7 +1112,14 @@ let () = define "validate" @@ fun state ->
     | _ ->
         abort "focused panel is not a prompt"
 
-let () = define "execute_command" @@ fun state ->
+let help { H.add; line; nl; par; add_command; see_also } =
+  line "Execute a command.";
+  par ();
+  add "Prompt for a command name, such as "; add_command "save_as"; add " or "; add_command "move_left"; add ","; nl ();
+  line "and execute this command.";
+  see_also [ HL_command "execute_process" ]
+
+let () = define "execute_command" ~help @@ fun state ->
   prompt "Execute command: " state @@ fun name ->
   match String_map.find name !commands with
     | exception Not_found ->
@@ -780,7 +1127,16 @@ let () = define "execute_command" @@ fun state ->
     | { run } ->
         run state
 
-let () = define "execute_process" @@ fun state ->
+let help { H.add; line; nl; par; add_command; see_also } =
+  line "Execute an external command.";
+  par ();
+  add "Prompt for a program name and its arguments, such as ";
+  add ~style: (Style.bold ()) "ls -la"; add ", and execute it."; nl();
+  par ();
+  line "Run the process in the background. Display program output in the current panel.";
+  see_also [ HL_command "execute_command" ]
+
+let () = define "execute_process" ~help @@ fun state ->
   let panel = state.focus in
   prompt "Execute process: " state @@ fun command ->
   match Shell_lexer.items [] [] (Lexing.from_string command) with
@@ -799,7 +1155,7 @@ let help { H.line; par; see_also } =
   line "Prompt for the filename to switch to.";
   see_also [ HL_command "new"; HL_command "open" ]
 
-let () = define "switch_file" @@ fun state ->
+let () = define "switch_file" ~help @@ fun state ->
   let panel = state.focus in
   let names = sort_names (List.map File.get_name state.files) in
   choose_from_list ~choice: 0 "Switch to file: " names state @@ fun choice ->
@@ -817,7 +1173,16 @@ let () = define "switch_file" @@ fun state ->
         in
         panel.view <- view
 
-let () = define "choose_next" @@ fun state ->
+let help { H.line; add; nl; add_command; par; see_also } =
+  line "Select the item above the currently selected one.";
+  par ();
+  add "If you "; add_command "validate"; add " and an item is selected, choose this item"; nl ();
+  line "instead of what you typed.";
+  par ();
+  line "If no item is selected, select the first one, i.e. the one at the bottom.";
+  see_also [ HL_command "choose_previous" ]
+
+let () = define "choose_next" ~help @@ fun state ->
   match state.focus.view.kind with
     | List_choice choice ->
         let choices = Panel.filter_choices (Text.to_string state.focus.view.file.text) choice.choices in
@@ -827,7 +1192,16 @@ let () = define "choose_next" @@ fun state ->
     | _ ->
         abort "focused panel is not a prompt"
 
-let () = define "choose_previous" @@ fun state ->
+let help { H.line; add; nl; add_command; par; see_also } =
+  line "Select the item below the currently selected one.";
+  par ();
+  add "If you "; add_command "validate"; add " and an item is selected, choose this item"; nl ();
+  line "instead of what you typed.";
+  par ();
+  line "If the first item is selected, i.e. the one at the bottom, unselect it instead.";
+  see_also [ HL_command "choose_next" ]
+
+let () = define "choose_previous" ~help @@ fun state ->
   match state.focus.view.kind with
     | List_choice choice ->
         choice.choice <- choice.choice - 1;
