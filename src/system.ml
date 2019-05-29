@@ -50,6 +50,30 @@ let move_file source destination =
   with exn ->
     error ~exn "failed to rename %S into %S" source destination
 
+let with_open_in filename f =
+  match
+    open_in_bin filename
+  with
+    | exception exn ->
+        error ~exn "failed to open %S for reading" filename
+    | ch ->
+        match f ch with
+          | exception exn ->
+              (
+                match close_in ch with
+                  | exception exn ->
+                      Log.error ~exn "failed to close %S after error" filename
+                  | () ->
+                      ()
+              );
+              raise exn
+          | result ->
+              match close_in ch with
+                | exception exn ->
+                    error ~exn "failed to close %S after reading" filename
+                | () ->
+                    result
+
 let with_open_out ?perm filename f =
   match
     match perm with

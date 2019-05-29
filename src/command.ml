@@ -2,7 +2,57 @@ open Misc
 
 module H = State.Help_maker
 
-let commands: State.command_definitions ref = ref String_map.empty
+(* type partial = Redl.Typing.command Redl.Typing.partial *)
+
+(* let define name ?help (command: partial) = *)
+(*   () *)
+
+(* let run (f: State.t -> unit): partial = *)
+(*   Redl.Typing.Partial { typ = Command; value = Constant f } *)
+
+(* let param (type a) (type a) (typ: (a, a) Redl.Typing.typ) (f: a -> partial): partial = *)
+(*   (\* let f p = *\) *)
+(*   (\*   fun state -> *\) *)
+(*   (\*     let Redl.Typing.Partial partial = f p in *\) *)
+(*   (\*     Redl.Run.eval state partial.value *\) *)
+(*   (\* in *\) *)
+(*   (\* Redl.Typing.Partial { *\) *)
+(*   (\*   typ = Function (typ, Command); *\) *)
+(*   (\*   value = Constant f; *\) *)
+(*   (\* } *\) *)
+
+(*   (\* Execute [f] with a dummy value to get the type of its result. *)
+(*      Commands should never perform side-effects before they are fully applied anyway. *\) *)
+(*   let Redl.Typing.Partial result = f (Redl.Typing.dummy typ) in *)
+(*   (\* let f (p: a) = *\) *)
+(*   (\*   let Redl.Typing.Partial result = f p in *\) *)
+(*   (\*   result.value *\) *)
+(*   (\* in *\) *)
+(*   Redl.Typing.Partial { *)
+(*     typ = Function (typ, result.typ); *)
+(*     value = Constant f; *)
+(*   } *)
+
+type command =
+  | Run of (State.t -> unit)
+  | Param: ('a, 'a) Redl.Typing.typ * ('a -> command) -> command
+
+let define name ?help (command: command) =
+  let rec make_type: command -> Redl.Typing.command Redl.Typing.partial = function
+    | Run f ->
+        Partial { typ = Command; value = Constant f }
+  in
+  () (* TODO *)
+
+let run f = Run f
+let (@->) typ f = Param (typ, f)
+
+(* DEMO: TODO REMOVE *)
+let () = define "bla" @@ run @@ fun state -> ()
+let () = define "blu" @@ Int @-> fun int -> run @@ fun state -> ()
+
+(************* TODO remove *)
+let commands: State.command String_map.t ref = ref String_map.empty
 
 let define name ?help (run: State.t -> unit) =
   commands := String_map.add name ({ name; help; run }: State.command) !commands
@@ -26,6 +76,7 @@ let bind (context: State.Context.t) (state: State.t) key name =
   let context_bindings = State.get_context_bindings context state in
   let context_bindings = Key.Map.add key command context_bindings in
   state.bindings <- State.Context_map.add context context_bindings state.bindings
+(************* END TODO remove *)
 
 (******************************************************************************)
 (*                                   Helpers                                  *)

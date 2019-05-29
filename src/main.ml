@@ -1,10 +1,29 @@
+open Misc
+
 let main () =
+  (* Parse command-line arguments. *)
+  let filenames = ref [] in
+  let init_filenames = ref [] in
+
+  let add_init filename = init_filenames := filename :: !init_filenames in
+  let anon_fun filename = filenames := filename :: !filenames in
+  let spec =
+    Arg.align [
+      "--init", String add_init, "<FILE> Parse FILE and execute its commands to initialize the editor.";
+    ]
+  in
+  let usage_msg = "Usage: red [OPTIONS] [FILES..]" in
+  Arg.parse spec anon_fun usage_msg;
+
+  let filenames = List.rev !filenames in
+  let init_filenames = List.rev !init_filenames in
+
   (* Load files given on the command line. *)
   let files =
-    match Array.to_list Sys.argv with
-      | [] | [ _ ] ->
+    match filenames with
+      | [] ->
           [ File.create "(new file)" Text.empty ]
-      | _ :: filenames ->
+      | _ ->
           let load_file filename =
             let file = File.create filename Text.empty in
             File.load file filename;
@@ -33,7 +52,8 @@ let main () =
   in
 
   (* Create initial state. *)
-  let state = State.create layout in
+  let run_file, run_string, overload_command, overload_variable = Redl.init () in
+  let state = State.create ~run_file ~run_string layout in
   state.files <- files;
 
   (* Global Bindings *)
@@ -126,6 +146,23 @@ let main () =
   Ctrl_g => "cancel";
   Letter_q => "cancel";
   Return => "follow_link";
+
+(*   (\* Execute init scripts. *\) *)
+(*   let execute_init_script filename = *)
+(*     let ast = Redl.parse_file filename in *)
+(*     let env = *)
+(*       (\* TODO: should be done by Command? *\) *)
+(*       let declare name (command: State.command) env = *)
+(*         Redl.Typing.overload_simple_command name command.run env *)
+(*       in *)
+(*       String_map.fold declare !Command.commands Redl.Typing.empty_env *)
+(*       |> Redl.Typing.overload_command "info" (Function (String, Command)) (Constant (fun s _ -> Log.info "%s" s)) *)
+(*     in *)
+(*     let env, typed = Redl.type_file env ast in *)
+(*     Redl.Run.run_file state typed *)
+(*   in *)
+  List.iter (State.run_file state) init_filenames;
+exit 0;
 
   Term_run.run_raw_mode
     ~on_key_press: (State.on_key_press state)

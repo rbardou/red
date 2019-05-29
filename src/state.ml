@@ -48,6 +48,7 @@ and t =
   {
     mutable layout: Layout.t;
     mutable focus: Panel.t;
+    clipboard: Clipboard.t;
 
     (* Global bindings can be overridden by local bindings. *)
     mutable bindings: bindings Context_map.t;
@@ -56,14 +57,17 @@ and t =
        Also files that should not be reopened (reuse them instead). *)
     mutable files: File.t list;
 
-    clipboard: Clipboard.t;
+    (* The two following functions are Redl.run_file and Redl.run_string, but with [env] hidden in their closure
+       (because otherwise State would depend on Redl which already depends on State). *)
+    run_file: t -> string -> unit;
+    run_string: t -> string -> unit;
   }
 
 and bindings = command Key.Map.t
 
 type command_definitions = command String_map.t
 
-let create ?focus layout =
+let create ?focus ~run_file ~run_string layout =
   let focus =
     match focus with
       | None ->
@@ -74,9 +78,11 @@ let create ?focus layout =
   {
     layout;
     focus;
-    bindings = Context_map.empty;
     clipboard = { text = Text.empty };
+    bindings = Context_map.empty;
     files = [];
+    run_file;
+    run_string;
   }
 
 exception Exit
@@ -173,3 +179,6 @@ let set_focus state focus =
           ()
   );
   state.focus <- focus
+
+let run_file state filename =
+  state.run_file state filename
