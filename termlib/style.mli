@@ -9,6 +9,9 @@ type t =
     bg: Term.color;
   }
 
+(** Convert a style to a string, for debugging. *)
+val show: t -> string
+
 (** Default style with normal intensity, no underline, default colors. *)
 val default: t
 
@@ -56,3 +59,6 @@ val random:
 
 (** Same as [make ~fg ()]. *)
 val fg: Term.color -> t
+
+(** Same as [make ~bg ()]. *)
+val bg: Term.color -> t

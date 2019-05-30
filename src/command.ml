@@ -270,7 +270,7 @@ let select_all view =
 let save (file: File.t) filename =
   if filename <> "" then (
     file.name <- filename;
-    file.filename <- Some filename;
+    File.set_filename file (Some filename);
 
     if not (System.file_exists filename) then
       (
@@ -466,6 +466,47 @@ let display_help (state: State.t) make_page =
   (* Replace layout. *)
   State.set_layout state (Layout.single help_panel);
   State.set_focus state help_panel
+
+let ocaml_stylist =
+  File.Stylist_module {
+    equivalent = Ocaml.Stylist.equivalent;
+    start = Ocaml.Stylist.start;
+    add_char = Ocaml.Stylist.add_char;
+    end_of_file = Ocaml.Stylist.end_of_file;
+  }
+
+let redl_stylist =
+  File.Stylist_module {
+    equivalent = Redl.Stylist.equivalent;
+    start = Redl.Stylist.start;
+    add_char = Redl.Stylist.add_char;
+    end_of_file = Redl.Stylist.end_of_file;
+  }
+
+let set_stylist (view: File.view) =
+  if view.kind = File then (
+    let stylist =
+      match view.file.filename with
+        | None ->
+            None
+        | Some filename ->
+            if Filename.check_suffix filename ".ml" then
+              Some ocaml_stylist
+            else if Filename.check_suffix filename ".mli" then
+              Some ocaml_stylist
+            else if Filename.check_suffix filename ".mll" then
+              Some ocaml_stylist
+            else if Filename.check_suffix filename ".mly" then
+              Some ocaml_stylist
+            else if Filename.check_suffix filename ".red" then
+              Some redl_stylist
+            else
+              None
+    in
+    File.set_stylist_module view stylist
+  )
+
+let () = File.choose_stylist_automatically := set_stylist
 
 (******************************************************************************)
 (*                                 Definitions                                *)

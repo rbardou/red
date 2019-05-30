@@ -750,6 +750,12 @@ type intensity =
   | Bold
   | Faint
 
+let show_intensity intensity =
+  match intensity with
+    | Normal -> "Normal"
+    | Bold -> "Bold"
+    | Faint -> "Faint"
+
 let intensity intensity =
   match intensity with
     | Normal -> print_string "\027[22m"

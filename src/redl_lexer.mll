@@ -93,14 +93,15 @@
 let blank = [ ' ' '\t' '\r' ]
 let digits = ['0'-'9'] ['0'-'9' '_']*
 let identifier = ['a'-'z' 'A'-'Z' '_'] ['a'-'z' 'A'-'Z' '_' '0'-'9']*
+let comment = '#' [^'\n']*
 
 rule beginning_of_line state = parse
   (* Whitespace and comments in empty lines are ignored. *)
-  | blank* ('#' [^'\n']*)? '\n'
+  | blank* comment? '\n'
       {
         Lexing.new_line lexbuf;
       }
-  | blank* ('#' [^'\n']*)? eof
+  | blank* comment? eof
       {
         set_indentation state 0;
         push state EOF;
@@ -128,7 +129,7 @@ and parse_more = parse
 and not_beginning_of_line state = parse
   (* At the end of a line we go back to the [Beginning_of_line] mode of parsing,
      unless we are in some parentheses. *)
-  | '\n'
+  | comment? '\n'
       {
         Lexing.new_line lexbuf;
         if state.parenthesis_level = 0 then (
@@ -136,7 +137,7 @@ and not_beginning_of_line state = parse
           push state SEMI;
         );
       }
-  | eof
+  | comment? eof
       {
         push state SEMI;
         set_indentation state 0;

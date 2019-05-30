@@ -89,6 +89,8 @@ type 'state stylist_module =
     end_of_file: 'state -> Style.t;
   }
 
+type packed_stylist_module = Stylist_module: 'a stylist_module -> packed_stylist_module
+
 type 'state stylist =
   {
     stylist_module: 'state stylist_module;
@@ -416,6 +418,40 @@ let rec update_style view =
                 | Some _ ->
                     ()
 
+(* Update the range that a stylist must update, to include the given range. *)
+let update_stylist_range ~x1 ~y1 ~x2 ~y2 view =
+  match view.stylist with
+    | None ->
+        ()
+    | Some (Stylist stylist) ->
+        match stylist.status with
+          | Up_to_date ->
+              (* Start running stylist in background. *)
+              stylist.status <-
+                Search_beginning {
+                  next_x = x1;
+                  next_y = y1;
+                  end_x = x2;
+                  end_y = y2;
+                };
+              update_style view
+
+          | Search_beginning { next_x = old_x1; next_y = old_y1; end_x = old_x2; end_y = old_y2 }
+          | Parse { start_x = old_x1; start_y = old_y1; end_x = old_x2; end_y = old_y2 } ->
+              let xy1 = { x = x1; y = y1 } in
+              let xy2 = { x = x2; y = y2 } in
+              let old_xy1 = { x = old_x1; y = old_y1 } in
+              let old_xy2 = { x = old_x2; y = old_y2 } in
+              let new_xy1 = if xy1 <% old_xy1 then xy1 else old_xy1 in
+              let new_xy2 = if xy2 <% old_xy2 then old_xy2 else xy2 in
+              stylist.status <-
+                Search_beginning {
+                  next_x = new_xy1.x;
+                  next_y = new_xy1.y;
+                  end_x = new_xy2.x;
+                  end_y = new_xy2.y;
+                }
+
 let set_stylist_module view stylist_module =
   (* Kill old stylist. *)
   (
@@ -436,7 +472,7 @@ let set_stylist_module view stylist_module =
     | None ->
         (* TODO: reset style to default? (But incrementally.) *)
         view.stylist <- None
-    | Some stylist_module ->
+    | Some (Stylist_module stylist_module) ->
         let text = view.file.text in
         let last_line = Text.get_line_count text - 1 in
         let stylist =
@@ -583,41 +619,7 @@ let update_marks_after_delete ~x ~y ~characters ~lines marks =
   in
   List.iter move_mark marks
 
-(* Update the range that a stylist must update, to include the given range. *)
-let update_stylist_range ~x1 ~y1 ~x2 ~y2 view =
-  match view.stylist with
-    | None ->
-        ()
-    | Some (Stylist stylist) ->
-        match stylist.status with
-          | Up_to_date ->
-              (* Start running stylist in background. *)
-              stylist.status <-
-                Search_beginning {
-                  next_x = x1;
-                  next_y = y1;
-                  end_x = x2;
-                  end_y = y2;
-                };
-              update_style view
-
-          | Search_beginning { next_x = old_x1; next_y = old_y1; end_x = old_x2; end_y = old_y2 }
-          | Parse { start_x = old_x1; start_y = old_y1; end_x = old_x2; end_y = old_y2 } ->
-              let xy1 = { x = x1; y = y1 } in
-              let xy2 = { x = x2; y = y2 } in
-              let old_xy1 = { x = old_x1; y = old_y1 } in
-              let old_xy2 = { x = old_x2; y = old_y2 } in
-              let new_xy1 = if xy1 <% old_xy1 then xy1 else old_xy1 in
-              let new_xy2 = if xy2 <% old_xy2 then old_xy2 else xy2 in
-              stylist.status <-
-                Search_beginning {
-                  next_x = new_xy1.x;
-                  next_y = new_xy1.y;
-                  end_x = new_xy2.x;
-                  end_y = new_xy2.y;
-                }
-
-let update_views_after_insert ~x ~y ~characters ~lines views =
+let update_views_after_insert ?(keep_marks = false) ~x ~y ~characters ~lines views =
   (* Prepare a chunk of default style to insert. *)
   let style_sub =
     match views with
@@ -639,7 +641,7 @@ let update_views_after_insert ~x ~y ~characters ~lines views =
 
   (* Update all views. *)
   let update_view view =
-    update_marks_after_insert ~x ~y ~characters ~lines view.marks;
+    if not keep_marks then update_marks_after_insert ~x ~y ~characters ~lines view.marks;
     view.style <- Text.insert_text ~x ~y ~sub: style_sub view.style;
     (
       match view.stylist with
@@ -738,14 +740,8 @@ let create_cursor x y =
     clipboard = { text = Text.empty };
   }
 
-(* TODO: different stylists for each views *)
-let ocaml_stylist =
-  {
-    equivalent = Ocaml.Stylist.equivalent;
-    start = Ocaml.Stylist.start;
-    add_char = Ocaml.Stylist.add_char;
-    end_of_file = Ocaml.Stylist.end_of_file;
-  }
+(* Created by [Command] because of circular dependency issues. *)
+let choose_stylist_automatically = ref (fun _ -> Log.error "set_stylist is not initialized"; assert false)
 
 let create_view kind file =
   let cursor = create_cursor 0 0 in
@@ -764,7 +760,7 @@ let create_view kind file =
     }
   in
   file.views <- view :: file.views;
-  if kind = File then set_stylist_module view (Some ocaml_stylist);
+  !choose_stylist_automatically view;
   view
 
 (* You may want to use [State.create_file] instead. *)
@@ -794,12 +790,15 @@ let kill_spawn_group file =
         Spawn.kill group;
         file.spawn_group <- None
 
+let set_filename file filename =
+  file.filename <- filename;
+  foreach_view file !choose_stylist_automatically
+
 (* Reset a file to an empty text as if it was created by [create].
    Keep views, but reset them as well. *)
 let reset file =
   (* Reset file. *)
   file.text <- Text.empty;
-  file.filename <- None;
   file.loading <- No;
   file.modified <- false;
   file.undo_stack <- [];
@@ -808,6 +807,7 @@ let reset file =
   file.process_status <- None;
   close_all_file_descriptors file;
   wait_all_pids file;
+  set_filename file None;
 
   (* Reset views. *)
   foreach_view file @@ fun view ->
@@ -835,7 +835,7 @@ let load file filename =
     (Unix.fstat file_descr).st_size
   in
   reset file;
-  file.filename <- Some filename;
+  set_filename file (Some filename);
   file.loading <- File { loaded = 0; size; sub_strings_rev = [] };
   file.open_file_descriptors <- file_descr :: file.open_file_descriptors;
   let group = create_spawn_group file in
@@ -854,11 +854,12 @@ let load file filename =
                Replace it by some kind of iterative parser. *)
             (
               close_file_descriptor file file_descr;
+              file.loading <- No;
               let text = Text.of_utf8_substrings_offset_0 (List.rev sub_strings_rev) in
               file.text <- text;
-              let style = Text.map (fun _ -> Style.default) text in
-              foreach_view file (fun view -> view.style <- style; set_stylist_module view (Some ocaml_stylist));
-              file.loading <- No
+              let lines = Text.get_line_count text - 1 in
+              let characters = Text.get_line_length lines text in
+              update_views_after_insert ~keep_marks: true ~x: 0 ~y: 0 ~characters ~lines file.views
             )
           else
             let sub_strings_rev = (Bytes.unsafe_to_string bytes, len) :: sub_strings_rev in
@@ -869,7 +870,7 @@ let load file filename =
 
 let create_process file program arguments =
   reset file;
-  file.filename <- None;
+  set_filename file None;
   file.loading <- Process program;
   let group = create_spawn_group file in
 

@@ -3,6 +3,7 @@ module Lexer = Redl_lexer
 module Parser = Redl_parser
 module Typing = Redl_typing
 module Run = Redl_run
+module Stylist = Redl_stylist
 
 let error ((a, b): Ast.location) message =
   (* TODO: open file at location and display error there immediately? *)

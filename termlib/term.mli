@@ -103,6 +103,9 @@ type intensity =
   | Bold
   | Faint
 
+(** Convert a color into a string like ["Bold"]. *)
+val show_intensity: intensity -> string
+
 (** Set text intensity. *)
 val intensity: intensity -> unit
 

@@ -6,6 +6,13 @@ type t =
     bg: Term.color;
   }
 
+let show style =
+  Printf.sprintf "{ %s, %b, %s, %s }"
+    (Term.show_intensity style.intensity)
+    style.underline
+    (Term.show_color style.fg)
+    (Term.show_color style.bg)
+
 let default =
   {
     intensity = Normal;
@@ -100,3 +107,6 @@ let random
 
 let fg fg =
   make ~fg ()
+
+let bg bg =
+  make ~bg ()
