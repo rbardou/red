@@ -447,7 +447,7 @@ let choose_from_file_system ?default (prompt: string) (state: State.t) (validate
   browse ?default (append_dir_sep_if_needed starting_directory)
 
 let display_help (state: State.t) make_page =
-  let text, style, links = make_page state in
+  let topic, text, style, links = make_page state in
 
   (* Create help panel. *)
   let help_panel =
@@ -458,7 +458,7 @@ let display_help (state: State.t) make_page =
       State.set_layout state initial_layout;
       State.set_focus state initial_focus;
     in
-    let view = File.create_view (Help { restore; links }) file in
+    let view = File.create_view (Help { topic; restore; links }) file in
     view.style <- style;
     Panel.create view
   in
@@ -497,11 +497,12 @@ let () = define "quit" ~help Command @@ fun state ->
     prompt_confirmation ~global: true message state @@ fun () ->
     raise State.Exit
 
-let help { H.line; par } =
+let help { H.line; add; add_link; nl; add_parameter; par } =
   line "Open help.";
   par ();
-  line "This opens the list of key bindings, and you can navigate to other help pages";
-  line "from here.";
+  add "Open help page specified by "; add_parameter "page"; add "."; nl ();
+  line "It can be a command name or a topic.";
+  add "Default page is "; add_link "bindings"; add "."; nl ();
   par ();
   line "Press Q to go back to what you were doing."
 

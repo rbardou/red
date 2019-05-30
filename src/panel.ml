@@ -210,7 +210,7 @@ let render focused_panel (frame: Render.frame) panel ~x ~y ~w ~h =
         render_choice_list frame choices choice ~x ~y ~w ~h: (h - 1);
         render_prompt has_focus frame view prompt ~x ~y: (y + h - 1) ~w
 
-    | Help _ ->
+    | Help { topic } ->
         render_view ~x ~y ~w ~h: (h - 1);
         let style = make_status_bar_style has_focus in
-        Render.text ~style frame 0 (y + h - 1) w "Press Q to close help."
+        Render.text ~style frame 0 (y + h - 1) w ("Help (" ^ topic ^ ") -- Press Q to close.")

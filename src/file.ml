@@ -192,6 +192,7 @@ and choice =
 
 and help =
   {
+    topic: string;
     restore: unit -> unit;
     links: string option Text.t;
   }

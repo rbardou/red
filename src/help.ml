@@ -9,6 +9,7 @@ type maker =
     header: string -> unit;
     add_link: string -> unit;
     see_also: string list -> unit;
+    add_parameter: string -> unit;
   }
 
 type command =
@@ -51,7 +52,7 @@ let bind (context: State.Context.t) (key: Key.t) (command: Redl.Ast.file) =
   let context_bindings = Key.Map.add key command context_bindings in
   bindings := State.Context_map.add context context_bindings !bindings
 
-let make (state: State.t) (f: maker -> unit) =
+let make topic (state: State.t) (f: maker -> unit) =
   let result_text = ref Text.empty in
   let result_style = ref Text.empty in
   let result_links = ref Text.empty in
@@ -102,9 +103,13 @@ let make (state: State.t) (f: maker -> unit) =
     List.iter (fun link -> add "    "; add_link link; nl ()) links
   in
 
-  f { add; nl; line; par; header; add_link; see_also };
+  let add_parameter name =
+    add ~style: (Style.make ~fg: Green ()) (String.uppercase_ascii name)
+  in
 
-  !result_text, !result_style, !result_links
+  f { add; nl; line; par; header; add_link; see_also; add_parameter };
+
+  topic, !result_text, !result_style, !result_links
 
 let page_exists name =
   match String_map.find name !commands with
@@ -135,7 +140,7 @@ let add_bindings bindings ({ line } as maker) =
     Key.Map.iter (add_binding maker) bindings
 
 let bindings_page state =
-  make state @@ fun ({ header } as maker) ->
+  make "bindings" state @@ fun ({ header } as maker) ->
 
   (* Local bindings. *)
   header (
@@ -152,9 +157,24 @@ let bindings_page state =
   add_bindings (get_bindings Global) maker
 
 let command_page (command: command) state =
-  make state @@ fun ({ add; nl; header; par; line } as maker) ->
+  make command.name state @@ fun ({ add; add_parameter; nl; header; par; line } as maker) ->
 
-  header ("COMMAND: " ^ command.name);
+  header "COMMAND";
+  let add_variant parameters =
+    add command.name;
+    let add_parameter (name, Redl.Typing.Type typ) =
+      add " (";
+      add_parameter name;
+      add ": ";
+      add (Redl.Typing.show_type false typ);
+      add ")";
+      nl ();
+    in
+    List.iter add_parameter parameters
+  in
+  List.iter add_variant command.variants;
+
+  header "DESCRIPTION";
   (
     match command.help with
       | None ->
@@ -193,9 +213,13 @@ let command_page (command: command) state =
   if not !exists then line "This command is not bound in any context."
 
 let page (name: string) state =
-  match String_map.find name !commands with
-    | exception Not_found ->
-        make state @@ fun { add; nl } ->
-        add "Help page not found: "; add name; nl ()
-    | command ->
-        command_page command state
+  match name with
+    | "bindings" ->
+        bindings_page state
+    | _ ->
+        match String_map.find name !commands with
+          | exception Not_found ->
+              make name state @@ fun { add; nl } ->
+              add "Help page not found: "; add name; nl ()
+          | command ->
+              command_page command state
