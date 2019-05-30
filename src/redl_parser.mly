@@ -42,6 +42,8 @@ parameters:
 statement:
 | SEMI LBRACE statements RBRACE
   { $3 }
+| LBRACE statements RBRACE
+  { $2 }
 | identifier arguments SEMI
   { node (Command ($1, $2)) }
 

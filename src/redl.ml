@@ -34,7 +34,7 @@ let parse_file filename =
 let parse_string string =
   parse_lexbuf (Lexing.from_string string)
 
-let type_file_ast env file_ast =
+let type_check env file_ast =
   try
     Typing.check_file env file_ast
   with
@@ -42,24 +42,17 @@ let type_file_ast env file_ast =
         error loc message;
         env, []
 
-let run_typed_file state typed_file =
+let run typed_file state =
   Run.run_file state typed_file
 
-let run_ast state env ast =
-  let env, typed = type_file_ast env ast in
-  run_typed_file state typed;
-  env
-
-let run_file state env filename =
-  run_ast state env (parse_file filename)
-
-let run_string state env string =
-  run_ast state env (parse_string string)
-
+(* Return a [type_check] function which manages its own environment in its closure,
+   and an [overload_command] function to enrich this environment. *)
 let init () =
   let env = ref Typing.empty_env in
-  let run_file state filename = env := run_file state !env filename in
-  let run_string state string = env := run_string state !env string in
-  let overload_command name typ value = env := Typing.overload_command name typ value !env in
-  let overload_variable name typ value = env := Typing.overload_variable name typ value !env in
-  run_file, run_string, overload_command, overload_variable
+  let type_check file_ast =
+    let new_env, typed_file = type_check !env file_ast in
+    env := new_env;
+    typed_file
+  in
+  let overload_command name partial = env := Typing.overload_command name partial !env in
+  type_check, overload_command

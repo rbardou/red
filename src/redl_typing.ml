@@ -127,7 +127,7 @@ let rec equal_types: type a b c d. (a, c) typ -> (b, d) typ -> (a, b) type_equal
     | Function _, _ ->
         No
 
-let overload_partial_command (type f) (name: string) (definition: command partial) (env: env): env =
+let overload_command (type f) (name: string) (definition: command partial) (env: env): env =
   let existing =
     match String_map.find name env.commands with
       | exception Not_found -> []
@@ -135,10 +135,7 @@ let overload_partial_command (type f) (name: string) (definition: command partia
   in
   { env with commands = String_map.add name (definition :: existing) env.commands }
 
-let overload_command (type f) (name: string) (typ: (f, command) typ) (value: f expression) (env: env): env =
-  overload_partial_command name (Partial { typ; value }) env
-
-let overload_partial_variable (type r) (name: string) (value: r partial) (env: env): env =
+let overload_variable (type r) (name: string) (value: r partial) (env: env): env =
   let Partial value = value in
   let return_type = get_return_type value.typ in
   match String_map.find name env.variables with
@@ -150,9 +147,6 @@ let overload_partial_variable (type r) (name: string) (value: r partial) (env: e
               { env with variables = String_map.add name (List (return_type, Partial value :: existing)) env.variables }
           | No ->
               invalid_arg "overload_partial_variable: new value returns a different type"
-
-let overload_variable (type f) (type r) (name: string) (typ: (f, r) typ) (value: f expression) (env: env): env =
-  overload_partial_variable name (Partial { typ; value }) env
 
 (* Check whether [definition] is a function that can take [arguments] to return a [r].
    If so, evaluate to return [r] as a singleton list.
@@ -332,7 +326,7 @@ let check_toplevel (env: env) (toplevel: Ast.toplevel): env * toplevel =
     | Command_definition definition ->
         let name = definition.value.name.value in
         let definition = check_command_definition env definition in
-        let env = overload_partial_command name definition env in
+        let env = overload_command name definition env in
         env, Command_definition definition
     | Statement statement ->
         let statement = check_statement env statement in

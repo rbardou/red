@@ -52,7 +52,10 @@ let main () =
   in
 
   (* Create initial state. *)
-  let run_file, run_string, overload_command, overload_variable = Redl.init () in
+  let type_check, overload_command = Redl.init () in
+  Command.setup_initial_env overload_command;
+  let run_file filename = Redl.parse_file filename |> type_check |> Redl.run in
+  let run_string string = Redl.parse_string string |> type_check |> Redl.run in
   let state = State.create ~run_file ~run_string layout in
   state.files <- files;
 
@@ -61,7 +64,7 @@ let main () =
 
   Alt_escape => "quit";
   F1 => "help";
-  Ctrl_h => "help";
+  Ctrl_h => "help; scroll_down; scroll_down";
   F4 => "remove_panel"; (* TODO: better binding? *)
 
   Right => "move_right";
@@ -147,22 +150,7 @@ let main () =
   Letter_q => "cancel";
   Return => "follow_link";
 
-(*   (\* Execute init scripts. *\) *)
-(*   let execute_init_script filename = *)
-(*     let ast = Redl.parse_file filename in *)
-(*     let env = *)
-(*       (\* TODO: should be done by Command? *\) *)
-(*       let declare name (command: State.command) env = *)
-(*         Redl.Typing.overload_simple_command name command.run env *)
-(*       in *)
-(*       String_map.fold declare !Command.commands Redl.Typing.empty_env *)
-(*       |> Redl.Typing.overload_command "info" (Function (String, Command)) (Constant (fun s _ -> Log.info "%s" s)) *)
-(*     in *)
-(*     let env, typed = Redl.type_file env ast in *)
-(*     Redl.Run.run_file state typed *)
-(*   in *)
-  List.iter (State.run_file state) init_filenames;
-exit 0;
+  List.iter (fun filename -> state.run_file filename state) init_filenames;
 
   Term_run.run_raw_mode
     ~on_key_press: (State.on_key_press state)

@@ -112,11 +112,6 @@ type 'state stylist =
 
 type packed_stylist = Stylist: 'a stylist -> packed_stylist
 
-type help_link =
-  | HL_none
-  | HL_command of string
-  (* TODO: HL_topic of string *)
-
 type t =
   {
     mutable views: view list;
@@ -198,7 +193,7 @@ and choice =
 and help =
   {
     restore: unit -> unit;
-    links: help_link Text.t;
+    links: string option Text.t;
   }
 
 and view_kind =
@@ -223,7 +218,7 @@ let recenter_y view cursor =
   let scroll_for_last_line =
     Text.get_line_count view.file.text - view.height
   in
-  view.scroll_y <- min scroll_for_last_line (max 0 (cursor.position.y - view.height / 2))
+  view.scroll_y <- max 0 (min scroll_for_last_line (cursor.position.y - view.height / 2))
 
 let recenter_x view cursor =
   view.scroll_x <- max 0 (cursor.position.x - view.width / 2)

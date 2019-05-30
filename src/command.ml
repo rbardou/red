@@ -1,82 +1,71 @@
 open Misc
 
-module H = State.Help_maker
+module H = Help
 
-(* type partial = Redl.Typing.command Redl.Typing.partial *)
-
-(* let define name ?help (command: partial) = *)
-(*   () *)
-
-(* let run (f: State.t -> unit): partial = *)
-(*   Redl.Typing.Partial { typ = Command; value = Constant f } *)
-
-(* let param (type a) (type a) (typ: (a, a) Redl.Typing.typ) (f: a -> partial): partial = *)
-(*   (\* let f p = *\) *)
-(*   (\*   fun state -> *\) *)
-(*   (\*     let Redl.Typing.Partial partial = f p in *\) *)
-(*   (\*     Redl.Run.eval state partial.value *\) *)
-(*   (\* in *\) *)
-(*   (\* Redl.Typing.Partial { *\) *)
-(*   (\*   typ = Function (typ, Command); *\) *)
-(*   (\*   value = Constant f; *\) *)
-(*   (\* } *\) *)
-
-(*   (\* Execute [f] with a dummy value to get the type of its result. *)
-(*      Commands should never perform side-effects before they are fully applied anyway. *\) *)
-(*   let Redl.Typing.Partial result = f (Redl.Typing.dummy typ) in *)
-(*   (\* let f (p: a) = *\) *)
-(*   (\*   let Redl.Typing.Partial result = f p in *\) *)
-(*   (\*   result.value *\) *)
-(*   (\* in *\) *)
-(*   Redl.Typing.Partial { *)
-(*     typ = Function (typ, result.typ); *)
-(*     value = Constant f; *)
-(*   } *)
-
+(* Built-in command definitions. *)
 type command =
-  | Run of (State.t -> unit)
-  | Param: ('a, 'a) Redl.Typing.typ * ('a -> command) -> command
-
-let define name ?help (command: command) =
-  let rec make_type: command -> Redl.Typing.command Redl.Typing.partial = function
-    | Run f ->
-        Partial { typ = Command; value = Constant f }
-  in
-  () (* TODO *)
-
-let run f = Run f
-let (@->) typ f = Param (typ, f)
-
-(* DEMO: TODO REMOVE *)
-let () = define "bla" @@ run @@ fun state -> ()
-let () = define "blu" @@ Int @-> fun int -> run @@ fun state -> ()
-
-(************* TODO remove *)
-let commands: State.command String_map.t ref = ref String_map.empty
-
-let define name ?help (run: State.t -> unit) =
-  commands := String_map.add name ({ name; help; run }: State.command) !commands
-
-let noop: State.command =
   {
-    name = "noop";
-    help = Some (fun { add } -> add "Do nothing.");
-    run = fun _ -> ();
+    name: string;
+    help: (Help.maker -> unit) option;
+    partial: Redl.Typing.command Redl.Typing.partial;
   }
 
-let bind (context: State.Context.t) (state: State.t) key name =
+(* List of all built-in commands. *)
+let commands: command list ref = ref []
+
+type _ typ =
+  | Command: Redl.Typing.command typ
+  | Function: { parameter_name: string; parameter_type: ('p, 'p) Redl.Typing.typ; result: 'r typ } -> ('p -> 'r) typ
+
+(* Make a parameterized command type. *)
+let (@->) (parameter_name, parameter_type) result =
+  Function { parameter_name; parameter_type; result }
+
+let (-:) name (typ: (_, _) Redl.Typing.typ) =
+  name, typ
+
+(* Add a command, parameterized or not, to the list of built-in commands. *)
+let define (type f) name ?help (typ: f typ) (f: f) =
+  (* Declare command. *)
+  let rec make_type: type f. f typ -> (f, Redl.Typing.command) Redl.Typing.typ = function
+    | Command ->
+        Command
+    | Function { parameter_type; result } ->
+        Function (parameter_type, make_type result)
+  in
   let command =
-    match String_map.find name !commands with
-      | exception Not_found ->
-          Log.error "unbound command: %s" name;
-          noop
-      | command ->
-          command
+    {
+      name;
+      help;
+      partial = Partial { typ = make_type typ; value = Constant f };
+    }
+  in
+  commands := command :: !commands;
+
+  (* Declare help page. *)
+  let rec get_parameters: type f. _ -> f typ -> _ = fun acc typ ->
+    match typ with
+      | Command ->
+          List.rev acc
+      | Function { parameter_name; parameter_type; result } ->
+          get_parameters ((parameter_name, Redl.Typing.Type parameter_type) :: acc) result
+  in
+  Help.overload_command name ?help (get_parameters [] typ)
+
+let setup_initial_env overload_command =
+  let add command = overload_command command.name command.partial in
+  List.iter add !commands
+
+let bind (context: State.Context.t) (state: State.t) (key: Key.t) (command: string) =
+  let ast = Redl.parse_string command in
+  let command =
+    (* Parse, type, but do not execute yet. *)
+    state.run_string command
   in
   let context_bindings = State.get_context_bindings context state in
   let context_bindings = Key.Map.add key command context_bindings in
-  state.bindings <- State.Context_map.add context context_bindings state.bindings
-(************* END TODO remove *)
+  state.bindings <- State.Context_map.add context context_bindings state.bindings;
+  Help.bind context key ast
 
 (******************************************************************************)
 (*                                   Helpers                                  *)
@@ -457,7 +446,9 @@ let choose_from_file_system ?default (prompt: string) (state: State.t) (validate
   in
   browse ?default (append_dir_sep_if_needed starting_directory)
 
-let display_help (state: State.t) (text, style, links) =
+let display_help (state: State.t) make_page =
+  let text, style, links = make_page state in
+
   (* Create help panel. *)
   let help_panel =
     let file = File.create ~read_only: true "help" text in
@@ -480,14 +471,18 @@ let display_help (state: State.t) (text, style, links) =
 (*                                 Definitions                                *)
 (******************************************************************************)
 
-let () = define noop.name ?help: noop.help noop.run
+let help { H.add } =
+  add "Do nothing."
+
+let () = define "noop" ~help Command @@ fun state ->
+  ()
 
 let help { H.line; par } =
   line "Exit the editor.";
   par ();
   line "Prompt for confirmation if there are modified files."
 
-let () = define "quit" ~help @@ fun state ->
+let () = define "quit" ~help Command @@ fun state ->
   let modified_files = List.filter (fun (file: File.t) -> file.modified) state.files in
   let modified_file_count = List.length modified_files in
   if modified_file_count = 0 then
@@ -510,27 +505,26 @@ let help { H.line; par } =
   par ();
   line "Press Q to go back to what you were doing."
 
-let () = define "help" ~help @@ fun state ->
-  display_help state (Help.bindings !commands state)
+let () = define "help" ~help Command @@ fun state ->
+  display_help state Help.bindings_page
+
+let () = define "help" ("page" -: String @-> Command) @@ fun page state ->
+  display_help state (Help.page page)
 
 let help { H.line } =
   line "Follow a link to another help page to get more information."
 
-let () = define "follow_link" ~help @@ fun state ->
+let () = define "follow_link" ~help Command @@ fun state ->
   let view = state.focus.view in
   match view.kind with
     | Help { links } ->
         File.if_only_one_cursor view @@ fun cursor ->
         (
           match Text.get cursor.position.x cursor.position.y links with
-            | None | Some HL_none ->
+            | None | Some None ->
                 ()
-            | Some (HL_command name) ->
-                match String_map.find name !commands with
-                  | exception Not_found ->
-                      ()
-                  | command ->
-                      display_help state (Help.command command state)
+            | Some (Some link) ->
+                display_help state (Help.page link)
         )
     | _ ->
         ()
@@ -538,7 +532,7 @@ let () = define "follow_link" ~help @@ fun state ->
 let help { H.line } =
   line "Exit a prompt to go back to what you were doing."
 
-let () = define "cancel" ~help @@ fun state ->
+let () = define "cancel" ~help Command @@ fun state ->
   match state.focus.view.kind with
     | Help { restore } ->
         (* TODO: if initial layout contains panels which view files which were killed, they need to change view. *)
@@ -555,9 +549,9 @@ let help { H.line; par; see_also } =
   line "Save file.";
   par ();
   line "If current file has no name, prompt for a filename.";
-  see_also [ HL_command "save_as" ]
+  see_also [ "save_as" ]
 
-let () = define "save" ~help @@ fun state ->
+let () = define "save" ~help Command @@ fun state ->
   let file_to_save = state.focus.view.file in
   match file_to_save.filename with
     | None ->
@@ -570,9 +564,9 @@ let help { H.line; par; see_also } =
   par ();
   line "Prompt for a filename even if current file already has one.";
   line "Existing file is not deleted.";
-  see_also [ HL_command "save" ]
+  see_also [ "save" ]
 
-let () = define "save_as" ~help @@ fun state ->
+let () = define "save_as" ~help Command @@ fun state ->
   let file_to_save = state.focus.view.file in
   choose_from_file_system ?default: file_to_save.filename "Save as: " state (save file_to_save)
 
@@ -580,9 +574,9 @@ let help { H.line; par; see_also } =
   line "Open a file in the current panel.";
   par ();
   line "Prompt for the filename to open.";
-  see_also [ HL_command "new"; HL_command "switch_file" ]
+  see_also [ "new"; "switch_file" ]
 
-let () = define "open" ~help @@ fun state ->
+let () = define "open" ~help Command @@ fun state ->
   let panel = state.focus in
   choose_from_file_system "Open: " state @@ fun filename ->
   if not (System.file_exists filename) then abort "file does not exist: %S" filename;
@@ -594,9 +588,9 @@ let help { H.line; par; see_also } =
   line "Create a new empty file.";
   par ();
   line "The file is not actually created on disk until you save.";
-  see_also [ HL_command "open"; HL_command "switch_file" ]
+  see_also [ "open"; "switch_file" ]
 
-let () = define "new" ~help @@ fun state ->
+let () = define "new" ~help Command @@ fun state ->
   let panel = state.focus in
   let file = State.create_file state "(new file)" Text.empty in
   let view = File.create_view File file in
@@ -605,7 +599,8 @@ let () = define "new" ~help @@ fun state ->
 let help { H.line } =
   line "Remove current panel from current layout."
 
-let () = define "remove_panel" @@ fun state -> State.remove_panel state.focus state
+let () = define "remove_panel" ~help Command @@ fun state ->
+  State.remove_panel state.focus state
 
 let help { H.line; par; see_also } =
   line "Move cursor to the right.";
@@ -617,11 +612,11 @@ let help { H.line; par; see_also } =
   par ();
   line "Reset selection and preferred column.";
   see_also [
-    HL_command "move_left"; HL_command "move_down"; HL_command "move_up";
-    HL_command "select_right"; HL_command "move_end_of_line"; HL_command "move_right_word";
+    "move_left"; "move_down"; "move_up";
+    "select_right"; "move_end_of_line"; "move_right_word";
   ]
 
-let () = define "move_right" ~help @@ move true false move_right
+let () = define "move_right" ~help Command @@ move true false move_right
 
 let help { H.line; par; see_also } =
   line "Move cursor to the left.";
@@ -633,11 +628,11 @@ let help { H.line; par; see_also } =
   par ();
   line "Reset selection and preferred column.";
   see_also [
-    HL_command "move_right"; HL_command "move_down"; HL_command "move_up";
-    HL_command "select_left"; HL_command "move_beginning_of_line"; HL_command "move_left_word";
+    "move_right"; "move_down"; "move_up";
+    "select_left"; "move_beginning_of_line"; "move_left_word";
   ]
 
-let () = define "move_left" ~help @@ move true false move_left
+let () = define "move_left" ~help Command @@ move true false move_left
 
 let help { H.line; par; see_also } =
   line "Move cursor to the next line.";
@@ -649,11 +644,11 @@ let help { H.line; par; see_also } =
   par ();
   line "Reset selection.";
   see_also [
-    HL_command "move_up"; HL_command "move_right"; HL_command "move_left";
-    HL_command "select_down"; HL_command "move_end_of_file"; HL_command "move_down_paragraph";
+    "move_up"; "move_right"; "move_left";
+    "select_down"; "move_end_of_file"; "move_down_paragraph";
   ]
 
-let () = define "move_down" ~help @@ move true true move_down
+let () = define "move_down" ~help Command @@ move true true move_down
 
 let help { H.line; par; see_also } =
   line "Move cursor to the previous line.";
@@ -665,11 +660,11 @@ let help { H.line; par; see_also } =
   par ();
   line "Reset selection.";
   see_also [
-    HL_command "move_down"; HL_command "move_right"; HL_command "move_left";
-    HL_command "select_down"; HL_command "move_beginning_of_file"; HL_command "move_up_paragraph";
+    "move_down"; "move_right"; "move_left";
+    "select_down"; "move_beginning_of_file"; "move_up_paragraph";
   ]
 
-let () = define "move_up" ~help @@ move true true move_up
+let () = define "move_up" ~help Command @@ move true true move_up
 
 let help { H.line; par; see_also } =
   line "Move cursor to the end of the current line.";
@@ -678,11 +673,11 @@ let help { H.line; par; see_also } =
   par ();
   line "Reset selection and preferred column.";
   see_also [
-    HL_command "move_right"; HL_command "select_end_of_line";
-    HL_command "move_beginning_of_line"; HL_command "move_end_of_file";
+    "move_right"; "select_end_of_line";
+    "move_beginning_of_line"; "move_end_of_file";
   ]
 
-let () = define "move_end_of_line" ~help @@ move true false move_end_of_line
+let () = define "move_end_of_line" ~help Command @@ move true false move_end_of_line
 
 let help { H.line; par; see_also } =
   line "Move cursor to the beginning of the current line.";
@@ -691,11 +686,11 @@ let help { H.line; par; see_also } =
   par ();
   line "Reset selection and preferred column.";
   see_also [
-    HL_command "move_left"; HL_command "select_beginning_of_line";
-    HL_command "move_end_of_line"; HL_command "move_beginning_of_file";
+    "move_left"; "select_beginning_of_line";
+    "move_end_of_line"; "move_beginning_of_file";
   ]
 
-let () = define "move_beginning_of_line" ~help @@ move true false move_beginning_of_line
+let () = define "move_beginning_of_line" ~help Command @@ move true false move_beginning_of_line
 
 let help { H.line; par; see_also } =
   line "Move cursor to the end of the current file.";
@@ -704,10 +699,10 @@ let help { H.line; par; see_also } =
   par ();
   line "Reset selection and preferred column.";
   see_also [
-    HL_command "select_end_of_file"; HL_command "move_end_of_line"; HL_command "move_beginning_of_file";
+    "select_end_of_file"; "move_end_of_line"; "move_beginning_of_file";
   ]
 
-let () = define "move_end_of_file" ~help @@ move true false move_end_of_file
+let () = define "move_end_of_file" ~help Command @@ move true false move_end_of_file
 
 let help { H.line; par; see_also } =
   line "Move cursor to the beginning of the current file.";
@@ -716,10 +711,10 @@ let help { H.line; par; see_also } =
   par ();
   line "Reset selection and preferred column.";
   see_also [
-    HL_command "select_beginning_of_file"; HL_command "move_beginning_of_line"; HL_command "move_end_of_file";
+    "select_beginning_of_file"; "move_beginning_of_line"; "move_end_of_file";
   ]
 
-let () = define "move_beginning_of_file" ~help @@ move true false move_beginning_of_file
+let () = define "move_beginning_of_file" ~help Command @@ move true false move_beginning_of_file
 
 let help { H.line; par; see_also } =
   line "Move cursor to the end of the word.";
@@ -730,9 +725,9 @@ let help { H.line; par; see_also } =
   line "A word is a sequence of letters or digits.";
   par ();
   line "Reset selection and preferred column.";
-  see_also [ HL_command "select_right_word"; HL_command "move_left_word" ]
+  see_also [ "select_right_word"; "move_left_word" ]
 
-let () = define "move_right_word" ~help @@ move true false move_right_word
+let () = define "move_right_word" ~help Command @@ move true false move_right_word
 
 let help { H.line; par; see_also } =
   line "Move cursor to the beginning of the word.";
@@ -743,9 +738,9 @@ let help { H.line; par; see_also } =
   line "A word is a sequence of letters or digits.";
   par ();
   line "Reset selection and preferred column.";
-  see_also [ HL_command "select_left_word"; HL_command "move_right_word" ]
+  see_also [ "select_left_word"; "move_right_word" ]
 
-let () = define "move_left_word" ~help @@ move true false move_left_word
+let () = define "move_left_word" ~help Command @@ move true false move_left_word
 
 let help { H.line; par; see_also } =
   line "Move cursor to the end of the paragraph.";
@@ -756,9 +751,9 @@ let help { H.line; par; see_also } =
   line "A paragraph is a sequence of non-empty lines.";
   par ();
   line "Reset selection.";
-  see_also [ HL_command "select_down_paragraph"; HL_command "move_up_paragraph" ]
+  see_also [ "select_down_paragraph"; "move_up_paragraph" ]
 
-let () = define "move_down_paragraph" ~help @@ move true false move_down_paragraph
+let () = define "move_down_paragraph" ~help Command @@ move true false move_down_paragraph
 
 let help { H.line; par; see_also } =
   line "Move cursor to the beginning of the paragraph.";
@@ -769,69 +764,69 @@ let help { H.line; par; see_also } =
   line "A paragraph is a sequence of non-empty lines.";
   par ();
   line "Reset selection.";
-  see_also [ HL_command "select_up_paragraph"; HL_command "move_down_paragraph" ]
+  see_also [ "select_up_paragraph"; "move_down_paragraph" ]
 
-let () = define "move_up_paragraph" ~help @@ move true false move_up_paragraph
+let () = define "move_up_paragraph" ~help Command @@ move true false move_up_paragraph
 
-let help { H.add; nl; add_command } =
-  add "Same as "; add_command "move_right"; add " but does not reset selection."; nl ()
+let help { H.add; nl; add_link } =
+  add "Same as "; add_link "move_right"; add " but does not reset selection."; nl ()
 
-let () = define "select_right" ~help @@ move false false move_right
+let () = define "select_right" ~help Command @@ move false false move_right
 
-let help { H.add; nl; add_command } =
-  add "Same as "; add_command "move_left"; add " but does not reset selection."; nl ()
+let help { H.add; nl; add_link } =
+  add "Same as "; add_link "move_left"; add " but does not reset selection."; nl ()
 
-let () = define "select_left" ~help @@ move false false move_left
+let () = define "select_left" ~help Command @@ move false false move_left
 
-let help { H.add; nl; add_command } =
-  add "Same as "; add_command "move_down"; add " but does not reset selection."; nl ()
+let help { H.add; nl; add_link } =
+  add "Same as "; add_link "move_down"; add " but does not reset selection."; nl ()
 
-let () = define "select_down" ~help @@ move false true move_down
+let () = define "select_down" ~help Command @@ move false true move_down
 
-let help { H.add; nl; add_command } =
-  add "Same as "; add_command "move_up"; add " but does not reset selection."; nl ()
+let help { H.add; nl; add_link } =
+  add "Same as "; add_link "move_up"; add " but does not reset selection."; nl ()
 
-let () = define "select_up" ~help @@ move false true move_up
+let () = define "select_up" ~help Command @@ move false true move_up
 
-let help { H.add; nl; add_command } =
-  add "Same as "; add_command "move_end_of_line"; add " but does not reset selection."; nl ()
+let help { H.add; nl; add_link } =
+  add "Same as "; add_link "move_end_of_line"; add " but does not reset selection."; nl ()
 
-let () = define "select_end_of_line" ~help @@ move false false move_end_of_line
+let () = define "select_end_of_line" ~help Command @@ move false false move_end_of_line
 
-let help { H.add; nl; add_command } =
-  add "Same as "; add_command "move_beginning_of_line"; add " but does not reset selection."; nl ()
+let help { H.add; nl; add_link } =
+  add "Same as "; add_link "move_beginning_of_line"; add " but does not reset selection."; nl ()
 
-let () = define "select_beginning_of_line" ~help @@ move false false move_beginning_of_line
+let () = define "select_beginning_of_line" ~help Command @@ move false false move_beginning_of_line
 
-let help { H.add; nl; add_command } =
-  add "Same as "; add_command "move_end_of_file"; add " but does not reset selection."; nl ()
+let help { H.add; nl; add_link } =
+  add "Same as "; add_link "move_end_of_file"; add " but does not reset selection."; nl ()
 
-let () = define "select_end_of_file" ~help @@ move false false move_end_of_file
+let () = define "select_end_of_file" ~help Command @@ move false false move_end_of_file
 
-let help { H.add; nl; add_command } =
-  add "Same as "; add_command "move_beginning_of_file"; add " but does not reset selection."; nl ()
+let help { H.add; nl; add_link } =
+  add "Same as "; add_link "move_beginning_of_file"; add " but does not reset selection."; nl ()
 
-let () = define "select_beginning_of_file" ~help @@ move false false move_beginning_of_file
+let () = define "select_beginning_of_file" ~help Command @@ move false false move_beginning_of_file
 
-let help { H.add; nl; add_command } =
-  add "Same as "; add_command "move_right_word"; add " but does not reset selection."; nl ()
+let help { H.add; nl; add_link } =
+  add "Same as "; add_link "move_right_word"; add " but does not reset selection."; nl ()
 
-let () = define "select_right_word" ~help @@ move false false move_right_word
+let () = define "select_right_word" ~help Command @@ move false false move_right_word
 
-let help { H.add; nl; add_command } =
-  add "Same as "; add_command "move_left_word"; add " but does not reset selection."; nl ()
+let help { H.add; nl; add_link } =
+  add "Same as "; add_link "move_left_word"; add " but does not reset selection."; nl ()
 
-let () = define "select_left_word" ~help @@ move false false move_left_word
+let () = define "select_left_word" ~help Command @@ move false false move_left_word
 
-let help { H.add; nl; add_command } =
-  add "Same as "; add_command "move_down_paragraph"; add " but does not reset selection."; nl ()
+let help { H.add; nl; add_link } =
+  add "Same as "; add_link "move_down_paragraph"; add " but does not reset selection."; nl ()
 
-let () = define "select_down_paragraph" ~help @@ move false false move_down_paragraph
+let () = define "select_down_paragraph" ~help Command @@ move false false move_down_paragraph
 
-let help { H.add; nl; add_command } =
-  add "Same as "; add_command "move_up_paragraph"; add " but does not reset selection."; nl ()
+let help { H.add; nl; add_link } =
+  add "Same as "; add_link "move_up_paragraph"; add " but does not reset selection."; nl ()
 
-let () = define "select_up_paragraph" ~help @@ move false false move_up_paragraph
+let () = define "select_up_paragraph" ~help Command @@ move false false move_up_paragraph
 
 let help { H.line; par; see_also } =
   line "Select all text.";
@@ -840,14 +835,14 @@ let help { H.line; par; see_also } =
   line "Set position of all cursors to the end of the file.";
   line "Reset preferred column.";
   see_also [
-    HL_command "select_right";
-    HL_command "select_end_of_line";
-    HL_command "select_end_of_file";
-    HL_command "select_right_word";
-    HL_command "select_down_paragraph";
+    "select_right";
+    "select_end_of_line";
+    "select_end_of_file";
+    "select_right_word";
+    "select_down_paragraph";
   ]
 
-let () = define "select_all" ~help @@ fun state ->
+let () = define "select_all" ~help Command @@ fun state ->
   select_all state.focus.view
 
 let help { H.line; par; see_also } =
@@ -855,36 +850,36 @@ let help { H.line; par; see_also } =
   par ();
   line "Commands which act on a view act on the view of the focused panel.";
   line "Only one panel has focus at a given time.";
-  see_also [ HL_command "focus_left"; HL_command "focus_down"; HL_command "focus_up" ]
+  see_also [ "focus_left"; "focus_down"; "focus_up" ]
 
-let () = define "focus_right" ~help @@ focus_relative Layout.get_panel_right
+let () = define "focus_right" ~help Command @@ focus_relative Layout.get_panel_right
 
 let help { H.line; par; see_also } =
   line "Give focus to the panel at the left of the current one.";
   par ();
   line "Commands which act on a view act on the view of the focused panel.";
   line "Only one panel has focus at a given time.";
-  see_also [ HL_command "focus_right"; HL_command "focus_down"; HL_command "focus_up" ]
+  see_also [ "focus_right"; "focus_down"; "focus_up" ]
 
-let () = define "focus_left" ~help @@ focus_relative Layout.get_panel_left
+let () = define "focus_left" ~help Command @@ focus_relative Layout.get_panel_left
 
 let help { H.line; par; see_also } =
   line "Give focus to the panel below the current one.";
   par ();
   line "Commands which act on a view act on the view of the focused panel.";
   line "Only one panel has focus at a given time.";
-  see_also [ HL_command "focus_right"; HL_command "focus_left"; HL_command "focus_up" ]
+  see_also [ "focus_right"; "focus_left"; "focus_up" ]
 
-let () = define "focus_down" ~help @@ focus_relative Layout.get_panel_down
+let () = define "focus_down" ~help Command @@ focus_relative Layout.get_panel_down
 
 let help { H.line; par; see_also } =
   line "Give focus to the panel above the current one.";
   par ();
   line "Commands which act on a view act on the view of the focused panel.";
   line "Only one panel has focus at a given time.";
-  see_also [ HL_command "focus_right"; HL_command "focus_left"; HL_command "focus_down" ]
+  see_also [ "focus_right"; "focus_left"; "focus_down" ]
 
-let () = define "focus_up" ~help @@ focus_relative Layout.get_panel_up
+let () = define "focus_up" ~help Command @@ focus_relative Layout.get_panel_up
 
 let help { H.line; par; see_also } =
   line "Scroll half a page down.";
@@ -892,9 +887,9 @@ let help { H.line; par; see_also } =
   line "If there is only one cursor, also move it half a page down.";
   line "It moves to its preferred column, or to the last character of the line";
   line "if preferred column is after the end of the line.";
-  see_also [ HL_command "scroll_up" ]
+  see_also [ "scroll_up" ]
 
-let () = define "scroll_down" ~help @@ fun state ->
+let () = define "scroll_down" ~help Command @@ fun state ->
   let view = state.focus.view in
   let text = view.file.text in
 
@@ -916,9 +911,9 @@ let help { H.line; par; see_also } =
   line "If there is only one cursor, also move it half a page up.";
   line "It moves to its preferred column, or to the last character of the line";
   line "if preferred column is after the end of the line.";
-  see_also [ HL_command "scroll_down" ]
+  see_also [ "scroll_down" ]
 
-let () = define "scroll_up" ~help @@ fun state ->
+let () = define "scroll_up" ~help Command @@ fun state ->
   let view = state.focus.view in
 
   (* Scroll. *)
@@ -934,7 +929,7 @@ let help { H.line; par; see_also } =
   line "The end of the line moves to a new line below.";
   line "Cursor moves to the beginning of this new line."
 
-let () = define "insert_new_line" ~help @@ fun state ->
+let () = define "insert_new_line" ~help Command @@ fun state ->
   let view = state.focus.view in
   File.replace_selection_by_new_line view;
   File.recenter_if_needed view
@@ -946,12 +941,12 @@ let help { H.line; par; see_also } =
   line "If selection is not empty, delete it instead.";
   line "Reset preferred column.";
   see_also [
-    HL_command "delete_character_backwards";
-    HL_command "delete_end_of_line";
-    HL_command "delete_end_of_word";
+    "delete_character_backwards";
+    "delete_end_of_line";
+    "delete_end_of_word";
   ]
 
-let () = define "delete_character" ~help @@ fun state ->
+let () = define "delete_character" ~help Command @@ fun state ->
   let view = state.focus.view in
   File.delete_selection_or_character view;
   File.recenter_if_needed view
@@ -964,11 +959,11 @@ let help { H.line; par; see_also } =
   line "If selection is not empty, delete it instead.";
   line "Reset preferred column.";
   see_also [
-    HL_command "delete_character";
-    HL_command "delete_beginning_of_word";
+    "delete_character";
+    "delete_beginning_of_word";
   ]
 
-let () = define "delete_character_backwards" ~help @@ fun state ->
+let () = define "delete_character_backwards" ~help Command @@ fun state ->
   let view = state.focus.view in
   File.delete_selection_or_character_backwards view;
   File.recenter_if_needed view
@@ -978,11 +973,11 @@ let help { H.line; par; see_also } =
   par ();
   line "If cursor is at the end of a line, merge the next line instead.";
   see_also [
-    HL_command "delete_character";
-    HL_command "delete_end_of_word";
+    "delete_character";
+    "delete_end_of_word";
   ]
 
-let () = define "delete_end_of_line" ~help @@ fun state ->
+let () = define "delete_end_of_line" ~help Command @@ fun state ->
   let view = state.focus.view in
   (
     File.delete_from_cursors view @@ fun text cursor ->
@@ -1002,12 +997,12 @@ let help { H.line; par; see_also } =
   par ();
   line "If cursor is not in a word, delete until the end of the next word.";
   see_also [
-    HL_command "move_right_word";
-    HL_command "delete_character";
-    HL_command "delete_beginning_of_word";
+    "move_right_word";
+    "delete_character";
+    "delete_beginning_of_word";
   ]
 
-let () = define "delete_end_of_word" ~help @@ fun state ->
+let () = define "delete_end_of_word" ~help Command @@ fun state ->
   let view = state.focus.view in
   (
     File.delete_from_cursors view @@ fun text cursor ->
@@ -1020,12 +1015,12 @@ let help { H.line; par; see_also } =
   par ();
   line "If cursor is not in a word, delete until the beginning of the previous word.";
   see_also [
-    HL_command "move_left_word";
-    HL_command "delete_character_backwards";
-    HL_command "delete_end_of_word";
+    "move_left_word";
+    "delete_character_backwards";
+    "delete_end_of_word";
   ]
 
-let () = define "delete_beginning_of_word" ~help @@ fun state ->
+let () = define "delete_beginning_of_word" ~help Command @@ fun state ->
   let view = state.focus.view in
   (
     File.delete_from_cursors view @@ fun text cursor ->
@@ -1033,23 +1028,23 @@ let () = define "delete_beginning_of_word" ~help @@ fun state ->
   );
   File.recenter_if_needed view
 
-let help { H.add; line; nl; par; add_command } =
+let help { H.add; line; nl; par; add_link } =
   line "Create one cursor per selected line.";
   par ();
   line "If there are more than one cursor already, remove all cursors but one instead.";
   par ();
-  add "Commands which apply to cursors, such as "; add_command "move_right_word";
-  add " or "; add_command "delete_word"; add ","; nl ();
+  add "Commands which apply to cursors, such as "; add_link "move_right_word";
+  add " or "; add_link "delete_word"; add ","; nl ();
   line "are applied to all cursors.";
   par ();
-  add "Clipboard commands, such as "; add_command "copy"; add " and "; add_command "paste";
+  add "Clipboard commands, such as "; add_link "copy"; add " and "; add_link "paste";
   add ", use the cursor clipboard instead"; nl ();
   line "of the global clipboard. This means that you can have each cursor copy its";
   line "own selection, and paste it somewhere else.";
   par ();
-  add "Other commands, such as "; add_command "save_as"; add ", are only run once."; nl ()
+  add "Other commands, such as "; add_link "save_as"; add ", are only run once."; nl ()
 
-let () = define "create_cursors_from_selection" ~help @@ fun state ->
+let () = define "create_cursors_from_selection" ~help Command @@ fun state ->
   let view = state.focus.view in
   match view.cursors with
     | [] ->
@@ -1077,74 +1072,74 @@ let () = define "create_cursors_from_selection" ~help @@ fun state ->
         let cursors = if reverse then List.rev cursors else cursors in
         File.set_cursors view cursors
 
-let help { H.add; line; nl; par; add_command; see_also } =
+let help { H.add; line; nl; par; add_link; see_also } =
   line "Copy selection to clipboard.";
   par ();
   line "If there is only one cursor, selection is copied to the global clipboard.";
   line "It can be pasted from any view, in any file.";
   par ();
-  add "If there are several cursor (see "; add_command "create_cursors_from_selection";
+  add "If there are several cursor (see "; add_link "create_cursors_from_selection";
   add "),"; nl ();
   line "the selection of each cursor is copied to the local clipboard of each cursor.";
-  see_also [ HL_command "cut"; HL_command "paste" ]
+  see_also [ "cut"; "paste" ]
 
-let () = define "copy" ~help @@ fun state -> File.copy state.clipboard state.focus.view
+let () = define "copy" ~help Command @@ fun state -> File.copy state.clipboard state.focus.view
 
-let help { H.add; line; nl; par; add_command; see_also } =
+let help { H.add; line; nl; par; add_link; see_also } =
   line "Copy selection to clipboard, then delete selection.";
-  see_also [ HL_command "copy"; HL_command "paste" ]
+  see_also [ "copy"; "paste" ]
 
-let () = define "cut" ~help @@ fun state ->
+let () = define "cut" ~help Command @@ fun state ->
   let view = state.focus.view in
   File.cut state.clipboard view;
   File.recenter_if_needed view
 
-let help { H.add; line; nl; par; add_command; see_also } =
+let help { H.add; line; nl; par; add_link; see_also } =
   line "Paste from clipboard.";
   par ();
   line "Selection is deleted before pasting.";
   par ();
   line "If there is only one cursor, paste selection from the global clipboard.";
-  add "If there are several cursor (see "; add_command "create_cursors_from_selection";
+  add "If there are several cursor (see "; add_link "create_cursors_from_selection";
   add "),"; nl ();
   line "for each cursor, paste the clipboard of this cursor at its position.";
-  see_also [ HL_command "cut"; HL_command "paste" ]
+  see_also [ "cut"; "paste" ]
 
-let () = define "paste" ~help @@ fun state ->
+let () = define "paste" ~help Command @@ fun state ->
   let view = state.focus.view in
   File.paste state.clipboard view;
   File.recenter_if_needed view
 
-let help { H.add; line; nl; par; add_command; see_also } =
+let help { H.add; line; nl; par; add_link; see_also } =
   line "Undo recent edits.";
   par ();
   line "You can undo repeatedly until the point where the current file was last saved.";
-  see_also [ HL_command "redo" ]
+  see_also [ "redo" ]
 
-let () = define "undo" ~help @@ fun state -> File.undo state.focus.view.file
+let () = define "undo" ~help Command @@ fun state -> File.undo state.focus.view.file
 
-let help { H.add; line; nl; par; add_command; see_also } =
+let help { H.add; line; nl; par; add_link; see_also } =
   line "Redo what was recently undone.";
   par ();
   line "You can redo repeatedly until you come back to the point of the first undo";
   line "of the last undo sequence.";
   par ();
   line "Any edit which is not a redo or an undo will remove the possibility to redo.";
-  see_also [ HL_command "undo" ]
+  see_also [ "undo" ]
 
-let () = define "redo" ~help @@ fun state -> File.redo state.focus.view.file
+let () = define "redo" ~help Command @@ fun state -> File.redo state.focus.view.file
 
-let help { H.add; line; nl; par; add_command; see_also } =
+let help { H.add; line; nl; par; add_link; see_also } =
   line "Validate selected choice.";
   par ();
-  add "In a prompt, such as the one which appears when you "; add_command "quit"; add ","; nl ();
+  add "In a prompt, such as the one which appears when you "; add_link "quit"; add ","; nl ();
   line "validate the text you typed.";
   par ();
-  add "In a list of choices, such as the one which appears when you "; add_command "save_as"; add ","; nl ();
+  add "In a list of choices, such as the one which appears when you "; add_link "save_as"; add ","; nl ();
   line "validate selected choice. If you did not select anything,";
   line "validate the text you typed instead."
 
-let () = define "validate" ~help @@ fun state ->
+let () = define "validate" ~help Command @@ fun state ->
   let panel = state.focus in
   match panel.view.kind with
     | Prompt { validate } ->
@@ -1163,31 +1158,27 @@ let () = define "validate" ~help @@ fun state ->
     | _ ->
         abort "focused panel is not a prompt"
 
-let help { H.add; line; nl; par; add_command; see_also } =
+let help { H.add; line; nl; par; add_link; see_also } =
   line "Execute a command.";
   par ();
-  add "Prompt for a command name, such as "; add_command "save_as"; add " or "; add_command "move_left"; add ","; nl ();
+  add "Prompt for a command name, such as "; add_link "save_as"; add " or "; add_link "move_left"; add ","; nl ();
   line "and execute this command.";
-  see_also [ HL_command "execute_process" ]
+  see_also [ "execute_process" ]
 
-let () = define "execute_command" ~help @@ fun state ->
-  prompt "Execute command: " state @@ fun name ->
-  match String_map.find name !commands with
-    | exception Not_found ->
-        abort "unbound command: %s" name
-    | { run } ->
-        run state
+let () = define "execute_command" ~help Command @@ fun state ->
+  prompt "Execute command: " state @@ fun command ->
+  state.run_string command state
 
-let help { H.add; line; nl; par; add_command; see_also } =
+let help { H.add; line; nl; par; add_link; see_also } =
   line "Execute an external command.";
   par ();
   add "Prompt for a program name and its arguments, such as ";
   add ~style: (Style.bold ()) "ls -la"; add ", and execute it."; nl();
   par ();
   line "Run the process in the background. Display program output in the current panel.";
-  see_also [ HL_command "execute_command" ]
+  see_also [ "execute_command" ]
 
-let () = define "execute_process" ~help @@ fun state ->
+let () = define "execute_process" ~help Command @@ fun state ->
   let panel = state.focus in
   prompt "Execute process: " state @@ fun command ->
   match Shell_lexer.items [] [] (Lexing.from_string command) with
@@ -1204,9 +1195,9 @@ let help { H.line; par; see_also } =
   line "Switch to another already-opened file.";
   par ();
   line "Prompt for the filename to switch to.";
-  see_also [ HL_command "new"; HL_command "open" ]
+  see_also [ "new"; "open" ]
 
-let () = define "switch_file" ~help @@ fun state ->
+let () = define "switch_file" ~help Command @@ fun state ->
   let panel = state.focus in
   let names = sort_names (List.map File.get_name state.files) in
   choose_from_list ~choice: 0 "Switch to file: " names state @@ fun choice ->
@@ -1224,16 +1215,16 @@ let () = define "switch_file" ~help @@ fun state ->
         in
         panel.view <- view
 
-let help { H.line; add; nl; add_command; par; see_also } =
+let help { H.line; add; nl; add_link; par; see_also } =
   line "Select the item above the currently selected one.";
   par ();
-  add "If you "; add_command "validate"; add " and an item is selected, choose this item"; nl ();
+  add "If you "; add_link "validate"; add " and an item is selected, choose this item"; nl ();
   line "instead of what you typed.";
   par ();
   line "If no item is selected, select the first one, i.e. the one at the bottom.";
-  see_also [ HL_command "choose_previous" ]
+  see_also [ "choose_previous" ]
 
-let () = define "choose_next" ~help @@ fun state ->
+let () = define "choose_next" ~help Command @@ fun state ->
   match state.focus.view.kind with
     | List_choice choice ->
         let choices = Panel.filter_choices (Text.to_string state.focus.view.file.text) choice.choices in
@@ -1243,16 +1234,16 @@ let () = define "choose_next" ~help @@ fun state ->
     | _ ->
         abort "focused panel is not a prompt"
 
-let help { H.line; add; nl; add_command; par; see_also } =
+let help { H.line; add; nl; add_link; par; see_also } =
   line "Select the item below the currently selected one.";
   par ();
-  add "If you "; add_command "validate"; add " and an item is selected, choose this item"; nl ();
+  add "If you "; add_link "validate"; add " and an item is selected, choose this item"; nl ();
   line "instead of what you typed.";
   par ();
   line "If the first item is selected, i.e. the one at the bottom, unselect it instead.";
-  see_also [ HL_command "choose_next" ]
+  see_also [ "choose_next" ]
 
-let () = define "choose_previous" ~help @@ fun state ->
+let () = define "choose_previous" ~help Command @@ fun state ->
   match state.focus.view.kind with
     | List_choice choice ->
         choice.choice <- choice.choice - 1;

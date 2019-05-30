@@ -34,6 +34,8 @@ type file = toplevel list
 
 let foreach l f = List.iter f l
 
+(* Multi-Line *)
+
 let out_indent out (level: int) =
   out (String.make (level * 2) ' ')
 
@@ -71,18 +73,52 @@ let rec out_statement level out (statement: statement) =
         out_statement level out a.value;
         out_statement level out b.value
 
+let out_command_name_and_parameters out name parameters =
+  out "command "; out name.value;
+  (
+    foreach parameters @@ fun (name, typ) ->
+    out " ("; out name.value; out ": "; out typ.value; out ")"
+  );
+  out " ="
+
 let out_toplevel out (toplevel: toplevel) =
   match toplevel with
     | Command_definition { value = { name; parameters; body } } ->
-        out "command "; out name.value;
-        (
-          foreach parameters @@ fun (name, typ) ->
-          out " ("; out name.value; out ": "; out typ.value; out ")"
-        );
-        out " =\n";
+        out_command_name_and_parameters out name parameters; out "\n";
         out_statement 1 out body.value
     | Statement statement ->
         out_statement 0 out statement.value
 
 let out_file out (file: file) =
   foreach file (out_toplevel out)
+
+(* Flat *)
+
+let rec out_statement_flat braces_if_sequence out (statement: statement) =
+  match statement with
+    | Command (name, arguments) ->
+        out name.value;
+        (
+          foreach arguments @@ fun argument ->
+          out " "; out_expression out argument.value
+        )
+    | Sequence (a, b) ->
+        if braces_if_sequence then out "{ ";
+        out_statement_flat false out a.value;
+        out "; ";
+        out_statement_flat false out b.value;
+        if braces_if_sequence then out " }"
+
+let out_toplevel_flat out (toplevel: toplevel) =
+  match toplevel with
+    | Command_definition { value = { name; parameters; body } } ->
+        out_command_name_and_parameters out name parameters; out " ";
+        out_statement_flat true out body.value
+    | Statement statement ->
+        out_statement_flat false out statement.value
+
+let out_file_flat out (file: file) =
+  let first = ref true in
+  foreach file @@ fun toplevel ->
+  if !first then first := false else out "; ";
+  out_toplevel_flat out toplevel

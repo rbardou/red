@@ -23,49 +23,28 @@ end
 
 module Context_map = Map.Make (Context)
 
-module Help_maker =
-struct
-  type t =
-    {
-      add: ?style: Style.t -> ?link: File.help_link -> string -> unit;
-      nl: unit -> unit;
-      line: ?style: Style.t -> ?link: File.help_link -> string -> unit;
-      par: unit -> unit;
-      header: string -> unit;
-      add_command: string -> unit;
-      see_also: File.help_link list -> unit;
-    }
-end
-
-type command =
-  {
-    name: string;
-    help: (Help_maker.t -> unit) option;
-    run: t -> unit;
-  }
-
-and t =
+type t =
   {
     mutable layout: Layout.t;
     mutable focus: Panel.t;
     clipboard: Clipboard.t;
 
     (* Global bindings can be overridden by local bindings. *)
-    mutable bindings: bindings Context_map.t;
+    mutable bindings: (t -> unit) Key.Map.t Context_map.t;
 
     (* Files to check for modification before exiting.
        Also files that should not be reopened (reuse them instead). *)
     mutable files: File.t list;
 
     (* The two following functions are Redl.run_file and Redl.run_string, but with [env] hidden in their closure
-       (because otherwise State would depend on Redl which already depends on State). *)
-    run_file: t -> string -> unit;
-    run_string: t -> string -> unit;
+       (because otherwise State would depend on Redl which already depends on State).
+
+       After the first argument is applied, the program is parsed and typed.
+       This means that the environment which is used is the one available when applying the fisrt argument.
+       But the command is not actually run until the state argument is given. *)
+    run_file: string -> t -> unit;
+    run_string: string -> t -> unit;
   }
-
-and bindings = command Key.Map.t
-
-type command_definitions = command String_map.t
 
 let create ?focus ~run_file ~run_string layout =
   let focus =
@@ -101,16 +80,15 @@ let get_context_bindings context state =
     | bindings ->
         bindings
 
-let get_local_bindings state =
+let get_context state: Context.t =
   match state.focus.view.kind with
-    | File ->
-        get_context_bindings File state
-    | Prompt _ ->
-        get_context_bindings Prompt state
-    | List_choice _ ->
-        get_context_bindings List_choice state
-    | Help _ ->
-        get_context_bindings Help state
+    | File -> File
+    | Prompt _ -> Prompt
+    | List_choice _ -> List_choice
+    | Help _ -> Help
+
+let get_local_bindings state =
+  get_context_bindings (get_context state) state
 
 let get_global_bindings state =
   get_context_bindings Global state
@@ -126,11 +104,11 @@ let on_key_press state (key: Key.t) =
           Log.error "%s" reason
   in
   match Key.Map.find key (get_local_bindings state) with
-    | { run } ->
+    | run ->
         catch run state
     | exception Not_found ->
         match Key.Map.find key (get_global_bindings state) with
-          | { run } ->
+          | run ->
               catch run state
           | exception Not_found ->
               match Key.symbol key with
@@ -179,6 +157,3 @@ let set_focus state focus =
           ()
   );
   state.focus <- focus
-
-let run_file state filename =
-  state.run_file state filename
