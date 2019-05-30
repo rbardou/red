@@ -34,7 +34,7 @@ type file = toplevel list
 
 let foreach l f = List.iter f l
 
-(* Multi-Line *)
+(******************************************************************************)
 
 let out_indent out (level: int) =
   out (String.make (level * 2) ' ')
@@ -92,7 +92,7 @@ let out_toplevel out (toplevel: toplevel) =
 let out_file out (file: file) =
   foreach file (out_toplevel out)
 
-(* Flat *)
+(******************************************************************************)
 
 let rec out_statement_flat braces_if_sequence out (statement: statement) =
   match statement with
@@ -122,3 +122,23 @@ let out_file_flat out (file: file) =
   foreach file @@ fun toplevel ->
   if !first then first := false else out "; ";
   out_toplevel_flat out toplevel
+
+(******************************************************************************)
+
+let rec statement_uses_command name (statement: statement) =
+  match statement with
+    | Command (n, _) ->
+        name = n.value
+    | Sequence (a, b) ->
+        statement_uses_command name a.value ||
+        statement_uses_command name b.value
+
+let toplevel_uses_command name (toplevel: toplevel) =
+  match toplevel with
+    | Command_definition _ ->
+        false
+    | Statement statement ->
+        statement_uses_command name statement.value
+
+let file_uses_command name (file: file) =
+  List.exists (toplevel_uses_command name) file

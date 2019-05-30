@@ -64,7 +64,7 @@ let main () =
 
   Alt_escape => "quit";
   F1 => "help";
-  Ctrl_h => "help; scroll_down; scroll_down";
+  Ctrl_h => "help";
   F4 => "remove_panel"; (* TODO: better binding? *)
 
   Right => "move_right";

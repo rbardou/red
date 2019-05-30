@@ -113,30 +113,29 @@ let page_exists name =
     | command ->
         true
 
-let bindings_page state =
-  make state @@ fun { add; nl; line; header; add_link } ->
-
-  let add_binding key (command: Redl.Ast.file) =
-    let key = Key.display key in
-    let padding = 24 - String.length key in
-    add (String.make padding ' ');
-    add key;
-    add " ";
-    let add_maybe_link text =
-      if page_exists text then
-        add_link text
-      else
-        add text
-    in
-    Redl.Ast.out_file_flat add_maybe_link command;
-    nl ();
-  in
-  let add_bindings bindings =
-    if Key.Map.is_empty bindings then
-      line "(no bindings)"
+let add_binding { add; add_link; nl } key (command: Redl.Ast.file) =
+  let key = Key.display key in
+  let padding = 24 - String.length key in
+  add (String.make padding ' ');
+  add key;
+  add " ";
+  let add_maybe_link text =
+    if page_exists text then
+      add_link text
     else
-      Key.Map.iter add_binding bindings
+      add text
   in
+  Redl.Ast.out_file_flat add_maybe_link command;
+  nl ()
+
+let add_bindings bindings ({ line } as maker) =
+  if Key.Map.is_empty bindings then
+    line "(no bindings)"
+  else
+    Key.Map.iter (add_binding maker) bindings
+
+let bindings_page state =
+  make state @@ fun ({ header } as maker) ->
 
   (* Local bindings. *)
   header (
@@ -146,33 +145,14 @@ let bindings_page state =
       | List_choice _ -> "The following bindings are available because you are choosing from a list:"
       | Help _ -> "The following bindings are available because you are in the help panel:"
   );
-  add_bindings (get_bindings (State.get_context state));
+  add_bindings (get_bindings (State.get_context state)) maker;
 
   (* Global bindings. *)
   header "The following bindings are available globally:";
-  add_bindings (get_bindings Global);
-
-  (* (\* Unbound commands. *\) *)
-  (* let unbound_commands = *)
-  (*   let remove (acc: State.command_definitions) (context: State.Context.t) = *)
-  (*     let bindings = State.get_context_bindings context state in *)
-  (*     Key.Map.fold (fun _ (command: State.command) acc -> String_map.remove command.name acc) bindings acc *)
-  (*   in *)
-  (*   List.fold_left remove all_commands State.Context.list *)
-  (* in *)
-  (* if not (String_map.is_empty unbound_commands) then ( *)
-  (*   header "The following commands are not bound in any context:"; *)
-  (*   let add_command _ (command: State.command) = *)
-  (*     add "    "; *)
-  (*     add_command command.name; *)
-  (*     nl (); *)
-  (*   in *)
-  (*   String_map.iter add_command unbound_commands *)
-  (* ) *)
-  ()
+  add_bindings (get_bindings Global) maker
 
 let command_page (command: command) state =
-  make state @@ fun ({ add; nl; header; line } as maker) ->
+  make state @@ fun ({ add; nl; header; par; line } as maker) ->
 
   header ("COMMAND: " ^ command.name);
   (
@@ -183,41 +163,34 @@ let command_page (command: command) state =
           help maker
   );
 
-  (* header "BINDINGS"; *)
-  (* let exists = ref false in *)
-  (* let display_binding (context: State.Context.t) bindings = *)
-  (*   let bindings = Key.Map.filter (fun _ (cmd: State.command) -> cmd.name = command.name) bindings in *)
-  (*   let list_keys () = *)
-  (*     let count = Key.Map.cardinal bindings in *)
-  (*     let index = ref 0 in *)
-  (*     let add_key key _ = *)
-  (*       incr index; *)
-  (*       if !index > 1 then ( *)
-  (*         if !index = count then add " or " else add ", " *)
-  (*       ); *)
-  (*       add (Key.display key) *)
-  (*     in *)
-  (*     Key.Map.iter add_key bindings; *)
-  (*     add "."; nl () *)
-  (*   in *)
-  (*   if not (Key.Map.is_empty bindings) then ( *)
-  (*     exists := true; *)
-  (*     match context with *)
-  (*       | Global -> *)
-  (*           add "You can run this command using "; list_keys () *)
-  (*       | File -> *)
-  (*           add "In a file, you can run this command using "; list_keys () *)
-  (*       | Prompt -> *)
-  (*           add "In a prompt, you can run this command using "; list_keys () *)
-  (*       | List_choice -> *)
-  (*           add "When choosing from a list, you can run this command using "; list_keys () *)
-  (*       | Help -> *)
-  (*           add "In the help panel, you can run this command using "; list_keys () *)
-  (*   ) *)
-  (* in *)
-  (* State.Context_map.iter display_binding state.bindings; *)
-  (* if not !exists then line "This command is not bound in any context." *)
-  ()
+  header "BINDINGS";
+  let exists = ref false in
+  let display_binding (context: State.Context.t) bindings =
+    (* Get bindings where this command appears. *)
+    let bindings = Key.Map.filter (fun _ -> Redl.Ast.file_uses_command command.name) bindings in
+
+    (* Show these bindings. *)
+    if not (Key.Map.is_empty bindings) then (
+      exists := true;
+
+      (* Show context. *)
+      par ();
+      (
+        match context with
+          | Global -> line "Globally:"
+          | File -> line "In a file:"
+          | Prompt -> line "In a prompt:"
+          | List_choice -> line "When choosing from a list:"
+          | Help -> line "In the help panel:"
+      );
+      par ();
+
+      (* Show bindings. *)
+      add_bindings bindings maker
+    )
+  in
+  State.Context_map.iter display_binding !bindings;
+  if not !exists then line "This command is not bound in any context."
 
 let page (name: string) state =
   match String_map.find name !commands with
