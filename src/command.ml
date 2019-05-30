@@ -508,6 +508,24 @@ let set_stylist (view: File.view) =
 
 let () = File.choose_stylist_automatically := set_stylist
 
+let split_panel direction pos (state: State.t) =
+  match state.focus.view.kind with
+    | Prompt _ | List_choice _ | Help _ ->
+        (* TODO: create an empty file? *)
+        Log.error "cannot split this kind of panel"
+    | File ->
+        match
+          Layout.replace_panel state.focus (
+            Layout.split direction ~pos ~sep: (direction = Horizontal)
+              (Layout.single state.focus)
+              (Layout.single (Panel.create (File.copy_view state.focus.view)))
+          ) state.layout
+        with
+          | None ->
+              Log.error "failed to replace current panel: panel not found in current layout"
+          | Some new_layout ->
+              State.set_layout state new_layout
+
 (******************************************************************************)
 (*                                 Definitions                                *)
 (******************************************************************************)
@@ -638,8 +656,9 @@ let () = define "new" ~help Command @@ fun state ->
   let view = File.create_view File file in
   panel.view <- view
 
-let help { H.line } =
-  line "Remove current panel from current layout."
+let help { H.line; see_also } =
+  line "Remove current panel from current layout.";
+  see_also [ "split_panel_vertically"; "split_panel_horizontally" ]
 
 let () = define "remove_panel" ~help Command @@ fun state ->
   State.remove_panel state.focus state
@@ -892,7 +911,7 @@ let help { H.line; par; see_also } =
   par ();
   line "Commands which act on a view act on the view of the focused panel.";
   line "Only one panel has focus at a given time.";
-  see_also [ "focus_left"; "focus_down"; "focus_up" ]
+  see_also [ "focus_left"; "focus_down"; "focus_up"; "split_panel_horizontally" ]
 
 let () = define "focus_right" ~help Command @@ focus_relative Layout.get_panel_right
 
@@ -901,7 +920,7 @@ let help { H.line; par; see_also } =
   par ();
   line "Commands which act on a view act on the view of the focused panel.";
   line "Only one panel has focus at a given time.";
-  see_also [ "focus_right"; "focus_down"; "focus_up" ]
+  see_also [ "focus_right"; "focus_down"; "focus_up"; "split_panel_horizontally" ]
 
 let () = define "focus_left" ~help Command @@ focus_relative Layout.get_panel_left
 
@@ -910,7 +929,7 @@ let help { H.line; par; see_also } =
   par ();
   line "Commands which act on a view act on the view of the focused panel.";
   line "Only one panel has focus at a given time.";
-  see_also [ "focus_right"; "focus_left"; "focus_up" ]
+  see_also [ "focus_right"; "focus_left"; "focus_up"; "split_panel_vertically" ]
 
 let () = define "focus_down" ~help Command @@ focus_relative Layout.get_panel_down
 
@@ -919,7 +938,7 @@ let help { H.line; par; see_also } =
   par ();
   line "Commands which act on a view act on the view of the focused panel.";
   line "Only one panel has focus at a given time.";
-  see_also [ "focus_right"; "focus_left"; "focus_down" ]
+  see_also [ "focus_right"; "focus_left"; "focus_down"; "split_panel_vertically" ]
 
 let () = define "focus_up" ~help Command @@ focus_relative Layout.get_panel_up
 
@@ -1292,3 +1311,62 @@ let () = define "choose_previous" ~help Command @@ fun state ->
         if choice.choice < -1 then choice.choice <- -1
     | _ ->
         abort "focused panel is not a prompt"
+
+let help { H.line; add; nl; add_parameter; par; see_also } =
+  line "Split current panel vertically (top and bottom).";
+  par ();
+  add "If "; add_parameter "position"; add " is a positive integer, it specifies the height of the top panel."; nl ();
+  add "If "; add_parameter "position"; add " is a negative integer, it specifies the height of the bottom panel.";
+  nl ();
+  add "If "; add_parameter "position"; add " is a float, it is a ratio of the current panel height."; nl ();
+  add "Default "; add_parameter "position"; add " is 0.5 (half of current panel)."; nl ();
+  see_also [ "split_panel_horizontally"; "focus_down"; "focus_up"; "remove_panel" ]
+
+let () = define "split_panel_vertically" ~help Command @@ fun state ->
+  split_panel Vertical (Layout.Ratio (1, 2)) state
+
+let () = define "split_panel_vertically" ~help ("position" -: Int @-> Command) @@ fun position state ->
+  let position =
+    if position >= 0 then
+      Layout.Absolute_first position
+    else
+      Layout.Absolute_second (- position)
+  in
+  split_panel Vertical position state
+
+let () = define "split_panel_vertically" ~help ("position" -: Float @-> Command) @@ fun position state ->
+  if position >= 0. && position < 1. then
+    let position = Layout.Ratio (int_of_float (position *. 100_000.), 100_000) in
+    split_panel Vertical position state
+  else
+    Log.error "invalid position to split panel: %F" position
+
+let help { H.line; add; nl; add_parameter; par; see_also } =
+  line "Split current panel horizontally (top and bottom).";
+  par ();
+  add "If "; add_parameter "position";
+  add " is a positive integer, it specifies the height of the panel at the left."; nl ();
+  add "If "; add_parameter "position";
+  add " is a negative integer, it specifies the height of the panel at the right."; nl ();
+  add "If "; add_parameter "position"; add " is a float, it is a ratio of the current panel height."; nl ();
+  add "Default "; add_parameter "position"; add " is 0.5 (half of current panel)."; nl ();
+  see_also [ "split_panel_vertically"; "focus_right"; "focus_left"; "remove_panel" ]
+
+let () = define "split_panel_horizontally" ~help Command @@ fun state ->
+  split_panel Horizontal (Layout.Ratio (1, 2)) state
+
+let () = define "split_panel_horizontally" ~help ("position" -: Int @-> Command) @@ fun position state ->
+  let position =
+    if position >= 0 then
+      Layout.Absolute_first position
+    else
+      Layout.Absolute_second (- position)
+  in
+  split_panel Horizontal position state
+
+let () = define "split_panel_horizontally" ~help ("position" -: Float @-> Command) @@ fun position state ->
+  if position >= 0. && position < 1. then
+    let position = Layout.Ratio (int_of_float (position *. 100_000.), 100_000) in
+    split_panel Horizontal position state
+  else
+    Log.error "invalid position to split panel: %F" position

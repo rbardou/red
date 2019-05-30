@@ -65,7 +65,7 @@ let main () =
   Alt_escape => "quit";
   F1 => "help";
   Ctrl_h => "help";
-  F4 => "remove_panel"; (* TODO: better binding? *)
+  Alt_ctrl_d => "remove_panel";
 
   Right => "move_right";
   Left => "move_left";
@@ -128,6 +128,8 @@ let main () =
   Ctrl_n => "new";
   Alt_letter_x => "execute_command";
   Alt_ctrl_x => "execute_process";
+  Alt_ctrl_v => "split_panel_vertically";
+  Alt_ctrl_h => "split_panel_horizontally";
 
   (* Prompt Bindings *)
   let (=>) = Command.bind Prompt state in
@@ -142,6 +144,7 @@ let main () =
   Up => "choose_next";
   Down => "choose_previous";
   Return => "validate";
+  Alt_letter_x => "execute_command";
 
   (* Help Bindings *)
   let (=>) = Command.bind Help state in
@@ -149,6 +152,7 @@ let main () =
   Ctrl_g => "cancel";
   Letter_q => "cancel";
   Return => "follow_link";
+  Alt_letter_x => "execute_command";
 
   List.iter (fun filename -> state.run_file filename state) init_filenames;
 

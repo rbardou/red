@@ -31,7 +31,8 @@ let create_frame width height =
   }
 
 let set frame x y cell =
-  frame.grid.(y).(x) <- cell
+  if y >= 0 && x >= 0 && y < frame.height && x < frame.width then
+    frame.grid.(y).(x) <- cell
 
 let get frame x y =
   frame.grid.(y).(x)

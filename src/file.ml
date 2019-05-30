@@ -957,7 +957,7 @@ let foreach_cursor_clipboard (global_clipboard: Clipboard.t) view f =
     | cursors ->
         List.iter (fun cursor -> f cursor.clipboard cursor) cursors
 
-let make_undo file =
+let make_undo_view view =
   let make_undo_mark mark =
     {
       undo_mark = mark;
@@ -965,28 +965,28 @@ let make_undo file =
       undo_y = mark.y;
     }
   in
-  let make_undo_view view =
-    {
-      undo_view = view;
-      undo_scroll_x = view.scroll_x;
-      undo_scroll_y = view.scroll_y;
-      undo_marks = List.map make_undo_mark view.marks;
-      undo_style = view.style;
-      undo_stylist = (
-        match view.stylist with
-          | None ->
-              None
-          | Some (Stylist stylist) ->
-              Some (
-                Undo_stylist {
-                  undo_stylist_module = stylist.stylist_module;
-                  undo_state = stylist.state;
-                  undo_status = stylist.status;
-                }
-              )
-      );
-    }
-  in
+  {
+    undo_view = view;
+    undo_scroll_x = view.scroll_x;
+    undo_scroll_y = view.scroll_y;
+    undo_marks = List.map make_undo_mark view.marks;
+    undo_style = view.style;
+    undo_stylist = (
+      match view.stylist with
+        | None ->
+            None
+        | Some (Stylist stylist) ->
+            Some (
+              Undo_stylist {
+                undo_stylist_module = stylist.stylist_module;
+                undo_state = stylist.state;
+                undo_status = stylist.status;
+              }
+            )
+    );
+  }
+
+let make_undo file =
   {
     undo_text = file.text;
     undo_modified = file.modified;
@@ -1176,35 +1176,35 @@ let paste (global_clipboard: Clipboard.t) view =
   let characters = Text.get_line_length lines sub in
   update_views_after_insert ~x ~y ~characters ~lines view.file.views
 
-let restore_undo_point file undo =
-  file.text <- undo.undo_text;
-  file.modified <- undo.undo_modified;
+let restore_view undo =
   let restore_mark undo =
     undo.undo_mark.x <- undo.undo_x;
     undo.undo_mark.y <- undo.undo_y;
   in
-  let restore_view undo =
-    undo.undo_view.scroll_x <- undo.undo_scroll_x;
-    undo.undo_view.scroll_y <- undo.undo_scroll_y;
-    List.iter restore_mark undo.undo_marks;
-    undo.undo_view.style <- undo.undo_style;
-    undo.undo_view.stylist <- (
-      match undo.undo_stylist with
-        | None ->
-            None
-        | Some (Undo_stylist undo_stylist) ->
-            Some
-              (
-                Stylist {
-                  stylist_module = undo_stylist.undo_stylist_module;
-                  state = undo_stylist.undo_state;
-                  status = undo_stylist.undo_status;
-                  group = None;
-                }
-              )
-    );
-    update_style undo.undo_view;
-  in
+  undo.undo_view.scroll_x <- undo.undo_scroll_x;
+  undo.undo_view.scroll_y <- undo.undo_scroll_y;
+  List.iter restore_mark undo.undo_marks;
+  undo.undo_view.style <- undo.undo_style;
+  undo.undo_view.stylist <- (
+    match undo.undo_stylist with
+      | None ->
+          None
+      | Some (Undo_stylist undo_stylist) ->
+          Some
+            (
+              Stylist {
+                stylist_module = undo_stylist.undo_stylist_module;
+                state = undo_stylist.undo_state;
+                status = undo_stylist.undo_status;
+                group = None;
+              }
+            )
+  );
+  update_style undo.undo_view
+
+let restore_undo_point file undo =
+  file.text <- undo.undo_text;
+  file.modified <- undo.undo_modified;
   List.iter restore_view undo.undo_views
 
 let undo file =
@@ -1228,3 +1228,9 @@ let redo file =
         file.undo_stack <- make_undo file :: file.undo_stack;
         file.redo_stack <- remaining_stack;
         restore_undo_point file undo
+
+let copy_view view =
+  let copy = create_view view.kind view.file in
+  let undo = make_undo_view view in
+  restore_view { undo with undo_view = copy };
+  copy

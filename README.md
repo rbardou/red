@@ -14,6 +14,7 @@ It lists key bindings for the current context, and you can follow links to get m
 - Multiple cursors, to edit several parts at the same time.
 - Run external programs and display their output in the editor.
 - UTF-8 encoding.
+- Write configuration files in a simple language called RedL.
 
 ## Install
 
