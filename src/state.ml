@@ -73,6 +73,9 @@ let abort ?exn reason =
 
 let abort ?exn x = Printf.ksprintf (abort ?exn) x
 
+let get_focused_main_view state =
+  Panel.get_current_main_view state.focus
+
 let get_focused_view state =
   Panel.get_current_view state.focus
 
@@ -91,8 +94,8 @@ let get_context_bindings context state =
 
 let get_context state: Context.t =
   match (get_focused_view state).kind with
+    | Prompt -> Prompt
     | File -> File
-    | Prompt _ -> Prompt
     | List_choice _ -> List_choice
     | Help _ -> Help
 
@@ -158,11 +161,4 @@ let remove_panel panel state =
         state.focus <- next_panel
 
 let set_focus state focus =
-  (
-    match (get_focused_view state).kind with
-      | Prompt _ ->
-          remove_panel state.focus state
-      | File | List_choice _ | Help _ ->
-          ()
-  );
   state.focus <- focus

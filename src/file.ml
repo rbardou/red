@@ -36,12 +36,6 @@ type loading =
   | File of { loaded: int; size: int; sub_strings_rev: (string * int) list }
   | Process of string
 
-type prompt =
-  {
-    prompt: string;
-    validate: string -> unit;
-  }
-
 type 'state stylist_status =
   (* Notĥing to do, style is already up-to-date. *)
   | Up_to_date
@@ -148,6 +142,14 @@ and view =
     mutable cursors: cursor list;
     mutable style: Style.t Text.t;
     mutable stylist: packed_stylist option;
+    mutable prompt: prompt option;
+  }
+
+and prompt =
+  {
+    prompt_text: string;
+    validate_prompt: string -> unit;
+    prompt_view: view;
   }
 
 and undo =
@@ -185,8 +187,8 @@ and 'state undo_stylist =
 
 and choice =
   {
-    prompt: string;
-    validate: string -> unit;
+    choice_prompt_text: string;
+    validate_choice: string -> unit;
     choices: string list;
     mutable choice: int; (* among choices that match the filter *)
     original_view: view;
@@ -201,7 +203,7 @@ and help =
 
 and view_kind =
   | File
-  | Prompt of prompt
+  | Prompt
   | List_choice of choice
   | Help of help
 
@@ -757,6 +759,7 @@ let create_view kind file =
       cursors = [ cursor ];
       style = Text.map (fun _ -> Style.default) file.text;
       stylist = None;
+      prompt = None;
     }
   in
   file.views <- view :: file.views;

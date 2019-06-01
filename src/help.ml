@@ -143,14 +143,16 @@ let bindings_page state =
   make "bindings" state @@ fun ({ header } as maker) ->
 
   (* Local bindings. *)
+  let context = State.get_context state in
   header (
-    match (State.get_focused_view state).kind with
+    match context with
+      | Global -> assert false (* not a local context *)
       | File -> "The following bindings are available because you are editing a file:"
-      | Prompt _ -> "The following bindings are available because you are in a prompt:"
-      | List_choice _ -> "The following bindings are available because you are choosing from a list:"
-      | Help _ -> "The following bindings are available because you are in the help panel:"
+      | Prompt -> "The following bindings are available because you are in a prompt:"
+      | List_choice -> "The following bindings are available because you are choosing from a list:"
+      | Help -> "The following bindings are available because you are in the help panel:"
   );
-  add_bindings (get_bindings (State.get_context state)) maker;
+  add_bindings (get_bindings context) maker;
 
   (* Global bindings. *)
   header "The following bindings are available globally:";

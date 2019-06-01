@@ -6,8 +6,16 @@ type t =
     mutable previous_views: File.view list;
   }
 
-let get_current_view panel =
+let get_current_main_view panel =
   panel.view
+
+let get_current_view panel =
+  let view = panel.view in
+  match view.prompt with
+    | None ->
+        view
+    | Some { prompt_view } ->
+        prompt_view
 
 let set_current_view panel view =
   panel.view <- view
@@ -186,19 +194,29 @@ let render focused_panel (frame: Render.frame) panel ~x ~y ~w ~h =
       frame view ~x ~y ~w ~h
   in
 
+  (* Render prompt, if any. *)
+  let h =
+    match panel.view.prompt with
+      | None ->
+          h
+      | Some { prompt_text; prompt_view } ->
+          render_prompt has_focus frame prompt_view prompt_text ~x ~y: (y + h - 1) ~w;
+          h - 1
+  in
   match panel.view.kind with
+    | Prompt ->
+        (* Do not render prompts directly, always render their parent view. *)
+        invalid_arg "Panel.render: Prompt"
+
     | File ->
         render_view ~x ~y ~w ~h: (h - 1);
         render_file_status_bar has_focus frame view ~x ~y: (y + h - 1) ~w
 
-    | Prompt { prompt } ->
-        render_prompt has_focus frame view prompt ~x ~y ~w
-
-    | List_choice { prompt; choices; choice } ->
+    | List_choice { choice_prompt_text; choices; choice } ->
         let filter = Text.to_string view.file.text in
         let choices = filter_choices filter choices in
         render_choice_list frame choices choice ~x ~y ~w ~h: (h - 1);
-        render_prompt has_focus frame view prompt ~x ~y: (y + h - 1) ~w
+        render_prompt has_focus frame view choice_prompt_text ~x ~y: (y + h - 1) ~w
 
     | Help { topic } ->
         render_view ~x ~y ~w ~h: (h - 1);

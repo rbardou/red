@@ -300,59 +300,35 @@ let save (file: File.t) filename =
     file.redo_stack <- [];
   )
 
-let prompt ?(global = false) ?(default = "") (prompt: string) (state: State.t) (validate: string -> unit) =
-  (* Create prompt panel. *)
-  let prompt_panel =
-    let initial_focus = state.focus in
-    let validate string =
-      if global && Layout.panel_is_visible initial_focus state.layout then State.set_focus state initial_focus;
-      validate string
-    in
-    let file = File.create prompt (Text.of_utf8_string default) in
-    let view = File.create_view (Prompt { prompt; validate }) file in
-    select_all view;
-    Panel.create view
-  in
+let prompt ?(global = false) ?(default = "") (prompt_text: string) (state: State.t) (validate_prompt: string -> unit) =
+  let view = State.get_focused_main_view state in
+  let prompt_view = File.create_view Prompt (File.create prompt_text (Text.of_utf8_string default)) in
+  select_all prompt_view;
+  view.prompt <-
+    Some {
+      prompt_text;
+      validate_prompt;
+      prompt_view;
+    }
 
-  (* Add panel to layout and focus it. *)
-  let new_layout =
-    if global then
-      (* Split the whole layout. *)
-      Layout.split Vertical ~pos: (Absolute_second 1) ~main: Second
-        state.layout (Layout.single prompt_panel)
-    else
-      (* Split focused panel. *)
-      let new_sublayout =
-        Layout.split Vertical ~pos: (Absolute_second 1) ~main: Second
-          (Layout.single state.focus) (Layout.single prompt_panel)
-      in
-      match Layout.replace_panel state.focus new_sublayout state.layout with
-        | None ->
-            abort "focused panel is not in current layout"
-        | Some new_layout ->
-            new_layout
-  in
-  State.set_layout state new_layout;
-  State.set_focus state prompt_panel
-
-let rec prompt_confirmation ?global ?(repeated = false) message state confirm =
-  let message = if repeated then "Please answer yes or no. " ^ message else message in
+let rec prompt_confirmation ?global ?(repeated = 0) message state confirm =
+  let message = if repeated = 1 then "Please answer yes or no. " ^ message else message in
   prompt ?global ~default: "no" message state @@ fun response ->
   if String.lowercase_ascii response = "yes" then
     confirm ()
   else if String.lowercase_ascii response = "no" then
     ()
   else
-    prompt_confirmation ?global ~repeated: true message state confirm
+    prompt_confirmation ?global ~repeated: (min 2 (repeated + 1)) message state confirm
 
-let choose_from_list ?(default = "") ?(choice = -1) (prompt: string) (choices: string list) (state: State.t)
-    (validate: string -> unit) =
+let choose_from_list ?(default = "") ?(choice = -1) (choice_prompt_text: string) (choices: string list) (state: State.t)
+    (validate_choice: string -> unit) =
   (* Create choice file and view. *)
   let choice_view =
-    let file = File.create prompt (Text.of_utf8_string default) in
+    let file = File.create choice_prompt_text (Text.of_utf8_string default) in
     let view =
-      let original_view = State.get_focused_view state in
-      File.create_view (List_choice { prompt; validate; choices; choice; original_view }) file
+      let original_view = State.get_focused_main_view state in
+      File.create_view (List_choice { choice_prompt_text; validate_choice; choices; choice; original_view }) file
     in
     select_all view;
     view
@@ -451,7 +427,7 @@ let display_help (state: State.t) make_page =
 
   (* Create help panel. *)
   let help_panel =
-    let file = File.create ~read_only: true "help" text in
+    let file = File.create ~read_only: true "help" text in (* TODO: include topic in name? *)
     let initial_layout = state.layout in
     let initial_focus = state.focus in
     let restore () =
@@ -509,9 +485,9 @@ let set_stylist (view: File.view) =
 let () = File.choose_stylist_automatically := set_stylist
 
 let split_panel direction pos (state: State.t) =
-  let view = State.get_focused_view state in
+  let view = State.get_focused_main_view state in
   match view.kind with
-    | Prompt _ | List_choice _ | Help _ ->
+    | Prompt | List_choice _ | Help _ ->
         (* TODO: create an empty file? *)
         Log.error "cannot split this kind of panel"
     | File ->
@@ -576,7 +552,7 @@ let help { H.line } =
   line "Follow a link to another help page to get more information."
 
 let () = define "follow_link" ~help Command @@ fun state ->
-  let view = State.get_focused_view state in
+  let view = State.get_focused_main_view state in
   match view.kind with
     | Help { links } ->
         File.if_only_one_cursor view @@ fun cursor ->
@@ -594,17 +570,22 @@ let help { H.line } =
   line "Exit a prompt to go back to what you were doing."
 
 let () = define "cancel" ~help Command @@ fun state ->
-  match (State.get_focused_view state).kind with
-    | Help { restore } ->
-        (* TODO: if initial layout contains panels which view files which were killed, they need to change view. *)
-        restore ()
-    | Prompt _ ->
-        State.remove_panel state.focus state
-    | List_choice { original_view } ->
-        (* TODO: if initial layout contains panels which view files which were killed, they need to change view. *)
-        State.set_focused_view state original_view
-    | _ ->
-        ()
+  let view = State.get_focused_main_view state in
+  match view.prompt with
+    | Some _ ->
+        view.prompt <- None
+    | None ->
+        match view.kind with
+          | Help { restore } ->
+              (* TODO: if initial layout contains panels which view files which were killed,
+                 they need to change view. *)
+              restore ()
+          | List_choice { original_view } ->
+              (* TODO: if initial layout contains panels which view files which were killed,
+                 they need to change view. *)
+              State.set_focused_view state original_view
+          | _ ->
+              ()
 
 let help { H.line; par; see_also } =
   line "Save file.";
@@ -1203,23 +1184,25 @@ let help { H.add; line; nl; par; add_link; see_also } =
 
 let () = define "validate" ~help Command @@ fun state ->
   let panel = state.focus in
-  let view = Panel.get_current_view panel in
-  match view.kind with
-    | Prompt { validate } ->
-        State.remove_panel panel state;
-        validate (Text.to_string view.file.text)
-    | List_choice { validate; original_view; choice; choices } ->
-        let filter = Text.to_string view.file.text in
-        Panel.set_current_view panel original_view;
-        (
-          match List.nth (filter_choices filter choices) choice with
-            | exception (Invalid_argument _ | Failure _) ->
-                validate filter
-            | choice ->
-                validate choice
-        )
-    | _ ->
-        abort "focused panel is not a prompt"
+  let view = Panel.get_current_main_view panel in
+  match view.prompt with
+    | Some { validate_prompt; prompt_view } ->
+        view.prompt <- None;
+        validate_prompt (Text.to_string prompt_view.file.text)
+    | None ->
+        match view.kind with
+          | List_choice { validate_choice; original_view; choice; choices } ->
+              let filter = Text.to_string view.file.text in
+              Panel.set_current_view panel original_view;
+              (
+                match List.nth (filter_choices filter choices) choice with
+                  | exception (Invalid_argument _ | Failure _) ->
+                      validate_choice filter
+                  | choice ->
+                      validate_choice choice
+              )
+          | _ ->
+              abort "focused panel is not a prompt"
 
 let help { H.add; line; nl; par; add_link; see_also } =
   line "Execute a command.";
