@@ -261,4 +261,4 @@ let render focused_panel (frame: Render.frame) panel ~x ~y ~w ~h =
     | Help { topic } ->
         render_view ~x ~y ~w ~h: (h - 1);
         let style = make_status_bar_style has_focus in
-        Render.text ~style frame 0 (y + h - 1) w ("Help (" ^ topic ^ ") -- Press Q to close.")
+        Render.text ~style frame x (y + h - 1) w ("Help (" ^ topic ^ ") -- Press Q to close.")
