@@ -117,6 +117,7 @@ let main () =
 
   Ctrl_z => "undo";
   Ctrl_y => "redo";
+  Ctrl_g => "cancel";
 
   Ctrl_o => "open";
   F2 => "switch_file"; (* TODO: merge with Ctrl+O? *)
@@ -135,7 +136,6 @@ let main () =
   (* Prompt Bindings *)
   let (=>) = Command.bind Prompt state in
 
-  Ctrl_g => "cancel";
   Return => "validate";
 
   (* List choice Bindings *)

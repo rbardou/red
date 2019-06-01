@@ -555,22 +555,29 @@ let () = define "follow_link" ~help Command @@ fun state ->
     | _ ->
         ()
 
-let help { H.line } =
-  line "Exit a prompt to go back to what you were doing."
+let help { H.line; par } =
+  line "Cancel what you are doing.";
+  par ();
+  line "If you currently have multiple cursors, remove all but one.";
+  line "Else, if you are in a prompt, a list of choices or in a help panel, close it."
 
 let () = define "cancel" ~help Command @@ fun state ->
   let view = State.get_focused_main_view state in
-  match view.prompt with
-    | Some _ ->
-        view.prompt <- None
-    | None ->
-        match view.kind with
-          | Help _ | List_choice _ ->
-              if not (Panel.kill_current_view state.focus) then
-                let view = create_empty_view state in
-                State.set_focused_view state view
-          | _ ->
-              ()
+  match view.cursors with
+    | first :: _ :: _ ->
+        view.cursors <- [ first ]
+    | _ ->
+        match view.prompt with
+          | Some _ ->
+              view.prompt <- None
+          | None ->
+              match view.kind with
+                | Prompt | Help _ | List_choice _ ->
+                    if not (Panel.kill_current_view state.focus) then
+                      let view = create_empty_view state in
+                      State.set_focused_view state view
+                | File ->
+                    ()
 
 let help { H.line; par; see_also } =
   line "Save file.";
@@ -1057,7 +1064,7 @@ let () = define "delete_beginning_of_word" ~help Command @@ fun state ->
 let help { H.add; line; nl; par; add_link } =
   line "Create one cursor per selected line.";
   par ();
-  line "If there are more than one cursor already, remove all cursors but one instead.";
+  add "Use "; add_link "cancel"; add " to go back to one cursor."; nl ();
   par ();
   add "Commands which apply to cursors, such as "; add_link "move_right_word";
   add " or "; add_link "delete_word"; add ","; nl ();
@@ -1072,31 +1079,28 @@ let help { H.add; line; nl; par; add_link } =
 
 let () = define "create_cursors_from_selection" ~help Command @@ fun state ->
   let view = State.get_focused_view state in
-  match view.cursors with
-    | [] ->
-        ()
-    | cursor :: _ :: _ ->
-        view.cursors <- [ cursor ]
-    | [ cursor ] ->
-        let first, last, reverse =
-          let sel_y = cursor.selection_start.y in
-          let cur_y = cursor.position.y in
-          if sel_y <= cur_y then
-            sel_y, cur_y, true
-          else
-            cur_y, sel_y, false
-        in
-        let rec range acc first last =
-          if last < first then
-            acc
-          else
-            range (last :: acc) first (last - 1)
-        in
-        let text = view.file.text in
-        let create_cursor y = File.create_cursor (min (Text.get_line_length y text) cursor.position.x) y in
-        let cursors = List.map create_cursor (range [] first last) in
-        let cursors = if reverse then List.rev cursors else cursors in
-        File.set_cursors view cursors
+  let create_cursors_from_cursor (cursor: File.cursor) =
+    let first, last, reverse =
+      let sel_y = cursor.selection_start.y in
+      let cur_y = cursor.position.y in
+      if sel_y <= cur_y then
+        sel_y, cur_y, true
+      else
+        cur_y, sel_y, false
+    in
+    let rec range acc first last =
+      if last < first then
+        acc
+      else
+        range (last :: acc) first (last - 1)
+    in
+    let text = view.file.text in
+    let create_cursor y = File.create_cursor (min (Text.get_line_length y text) cursor.position.x) y in
+    let cursors = List.map create_cursor (range [] first last) in
+    if reverse then List.rev cursors else cursors
+  in
+  let cursors = List.map create_cursors_from_cursor view.cursors in
+  File.set_cursors view (List.flatten cursors)
 
 let help { H.add; line; nl; par; add_link; see_also } =
   line "Copy selection to clipboard.";
