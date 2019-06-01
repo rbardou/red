@@ -1234,4 +1234,24 @@ let copy_view view =
   let copy = create_view view.kind view.file in
   let undo = make_undo_view view in
   restore_view { undo with undo_view = copy };
+
+  (* The undo / redo mechanism does not copy cursors and their marks; it reuses existing ones.
+     So we need to copy them now. *)
+  let marks = ref [] in
+  let copy_mark (mark: mark): mark =
+    let copy = { x = mark.x; y = mark.y } in
+    marks := copy :: !marks;
+    copy
+  in
+  let copy_cursor (cursor: cursor): cursor =
+    {
+      selection_start = copy_mark cursor.selection_start;
+      position = copy_mark cursor.position;
+      preferred_x = cursor.preferred_x;
+      clipboard = cursor.clipboard;
+    }
+  in
+  copy.cursors <- List.map copy_cursor view.cursors;
+  copy.marks <- !marks;
+
   copy
