@@ -60,6 +60,11 @@ let kill_current_view panel =
     | [] ->
         false
 
+let remove_file file get_default_view panel =
+  panel.previous_views <- List.filter (fun (view: File.view) -> view.file != file) panel.previous_views;
+  if panel.view.file == file then
+    panel.view <- (get_default_view ())
+
 let create view =
   {
     view;

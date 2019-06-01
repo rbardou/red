@@ -317,7 +317,7 @@ let save (file: File.t) filename =
     file.redo_stack <- [];
   )
 
-let prompt ?(global = false) ?(default = "") (prompt_text: string) (state: State.t) (validate_prompt: string -> unit) =
+let prompt ?(default = "") (prompt_text: string) (state: State.t) (validate_prompt: string -> unit) =
   let view = State.get_focused_main_view state in
   let prompt_view = File.create_view Prompt (File.create prompt_text (Text.of_utf8_string default)) in
   select_all prompt_view;
@@ -328,15 +328,15 @@ let prompt ?(global = false) ?(default = "") (prompt_text: string) (state: State
       prompt_view;
     }
 
-let rec prompt_confirmation ?global ?(repeated = 0) message state confirm =
+let rec prompt_confirmation ?(repeated = 0) message state confirm =
   let message = if repeated = 1 then "Please answer yes or no. " ^ message else message in
-  prompt ?global ~default: "no" message state @@ fun response ->
+  prompt ~default: "no" message state @@ fun response ->
   if String.lowercase_ascii response = "yes" then
     confirm ()
   else if String.lowercase_ascii response = "no" then
     ()
   else
-    prompt_confirmation ?global ~repeated: (min 2 (repeated + 1)) message state confirm
+    prompt_confirmation ~repeated: (min 2 (repeated + 1)) message state confirm
 
 let choose_from_list ?(default = "") ?(choice = -1) (choice_prompt_text: string) (choices: string list) (state: State.t)
     (validate_choice: string -> unit) =
@@ -484,16 +484,12 @@ let set_stylist (view: File.view) =
 
 let () = File.choose_stylist_automatically := set_stylist
 
-let create_empty_view (state: State.t) =
-  let file = State.create_file state "(new file)" Text.empty in
-  File.create_view File file
-
 let split_panel direction pos (state: State.t) =
   let view = State.get_focused_main_view state in
   let new_view =
     match view.kind with
       | Prompt | List_choice _ | Help _ ->
-          create_empty_view state
+          State.get_default_view state
       | File ->
           File.copy_view view
   in
@@ -536,7 +532,7 @@ let () = define "quit" ~help Command @@ fun state ->
       else
         "There are " ^ string_of_int modified_file_count ^ " modified file(s), really exit? "
     in
-    prompt_confirmation ~global: true message state @@ fun () ->
+    prompt_confirmation message state @@ fun () ->
     raise State.Exit
 
 let help { H.line; add; add_link; nl; add_parameter; par } =
@@ -591,7 +587,7 @@ let () = define "cancel" ~help Command @@ fun state ->
               match view.kind with
                 | Prompt | Help _ | List_choice _ ->
                     if not (Panel.kill_current_view state.focus) then
-                      let view = create_empty_view state in
+                      let view = State.get_default_view state in
                       State.set_focused_view state view
                 | File ->
                     ()
@@ -642,15 +638,31 @@ let help { H.line; par; see_also } =
   see_also [ "open"; "switch_file" ]
 
 let () = define "new" ~help Command @@ fun state ->
-  let view = create_empty_view state in
+  let view = State.get_default_view state in
   State.set_focused_view state view
 
 let help { H.line; see_also } =
   line "Remove current panel from current layout.";
-  see_also [ "split_panel_vertically"; "split_panel_horizontally" ]
+  see_also [ "split_panel_vertically"; "split_panel_horizontally"; "close_file" ]
 
-let () = define "remove_panel" ~help Command @@ fun state ->
+let () = define "close_panel" ~help Command @@ fun state ->
   State.remove_panel state.focus state
+
+let help { H.line; par; see_also } =
+  line "Close current file.";
+  par ();
+  line "Remove it from all panels.";
+  par ();
+  line "Prompt for confirmation if file has been modified.";
+  see_also [ "close_panel" ]
+
+let () = define "close_file" ~help Command @@ fun state ->
+  let file = State.get_focused_file state in
+  if file.modified then
+    prompt_confirmation "File has been modified, really close it? " state @@ fun () ->
+    State.close_file file state
+  else
+    State.close_file file state
 
 let help { H.line; par; see_also } =
   line "Move cursor to the right.";
@@ -1298,7 +1310,7 @@ let () = define "validate" ~help Command @@ fun state ->
                    This should be a rare occurrence. *)
                 (* TODO: if validation results in opening a file, do not create a new empty file *)
                 (
-                  let view = create_empty_view state in
+                  let view = State.get_default_view state in
                   Panel.set_current_view panel view;
                 );
               (

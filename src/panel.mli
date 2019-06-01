@@ -29,6 +29,12 @@ val set_current_file: t -> File.t -> unit
     Return [false] if this was the last view. *)
 val kill_current_view: t -> bool
 
+(** Remove a file from a panel.
+
+    If panel is viewing this file, switch to another view.
+    If there is no other view, use the one given by the function given as second argument. *)
+val remove_file: File.t -> (unit -> File.view) -> t -> unit
+
 (** Create a panel with an initial view. *)
 val create: File.view -> t
 

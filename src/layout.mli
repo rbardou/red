@@ -65,3 +65,6 @@ val remove_panel: Panel.t -> t -> (t * Panel.t) option
 
 (** Return whether a panel is visible in a layout. *)
 val panel_is_visible: Panel.t -> t -> bool
+
+(** Iterate on each panel. *)
+val foreach_panel: t -> (Panel.t -> unit) -> unit

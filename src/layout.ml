@@ -317,3 +317,11 @@ let rec panel_is_visible panel layout =
         single_panel == panel
     | Split { first; second } ->
         panel_is_visible panel first || panel_is_visible panel second
+
+let rec foreach_panel layout f =
+  match layout with
+    | Single panel ->
+        f panel
+    | Split { first; second } ->
+        foreach_panel first f;
+        foreach_panel second f

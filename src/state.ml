@@ -162,3 +162,19 @@ let remove_panel panel state =
 
 let set_focus state focus =
   state.focus <- focus
+
+let get_default_view (state: t) =
+  match state.files with
+    | [] ->
+        let file = create_file state "(new file)" Text.empty in
+        File.create_view File file
+    | file :: _ ->
+        match file.views with
+          | [] ->
+              File.create_view File file
+          | view :: _ ->
+              File.copy_view view
+
+let close_file file state =
+  state.files <- List.filter ((!=) file) state.files;
+  Layout.foreach_panel state.layout (Panel.remove_file file (fun () -> get_default_view state))

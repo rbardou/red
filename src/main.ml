@@ -65,7 +65,7 @@ let main () =
   Alt_escape => "quit";
   F1 => "help";
   Ctrl_h => "help";
-  Alt_ctrl_d => "remove_panel";
+  Alt_ctrl_d => "close_panel";
 
   Right => "move_right";
   Left => "move_left";
@@ -131,6 +131,7 @@ let main () =
 
   Ctrl_o => "open";
   F2 => "switch_file"; (* TODO: merge with Ctrl+O? *)
+  F4 => "close_file";
   Ctrl_n => "new";
   Alt_letter_x => "execute_command";
   Alt_ctrl_x => "execute_process";
