@@ -14,6 +14,15 @@ val get_current_view: t -> File.view
 (** Set the current view of a panel. *)
 val set_current_view: t -> File.view -> unit
 
+(** Set the current viewed file of a panel.
+
+    If there is already a view for this file in this panel, use it.
+    Else, copy a view from the file if it has one.
+    Else, create a new view.
+
+    New view has kind [File]. *)
+val set_current_file: t -> File.t -> unit
+
 (** Switch to previous view and forget about the current one.
 
     Cannot do that with the last view.

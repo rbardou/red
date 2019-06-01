@@ -1241,15 +1241,7 @@ let () = define "switch_file" ~help Command @@ fun state ->
     | exception Not_found ->
         abort "no such file: %s" choice
     | file ->
-        (* TODO: use previous view that this panel had *)
-        let view =
-          match file.views with
-            | [] ->
-                File.create_view File file
-            | head :: _ ->
-                head
-        in
-        Panel.set_current_view panel view
+        Panel.set_current_file panel file
 
 let help { H.line; add; nl; add_link; par; see_also } =
   line "Select the item above the currently selected one.";

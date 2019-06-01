@@ -3,6 +3,8 @@ open Misc
 type t =
   {
     mutable view: File.view; (* current view *)
+
+    (* Contains only [File] views. *)
     mutable previous_views: File.view list;
   }
 
@@ -17,8 +19,37 @@ let get_current_view panel =
     | Some { prompt_view } ->
         prompt_view
 
-let set_current_view panel view =
+let set_current_view panel (view: File.view) =
+  (* If current view is a File view, add it to previous views. *)
+  (
+    match panel.view.kind with
+      | File ->
+          panel.previous_views <- panel.view :: panel.previous_views
+      | Prompt | List_choice _ | Help _ ->
+          ()
+  );
+
+  (* Remove previous views which already visit the same file as [view].
+     This may include the view that we just added. *)
+  let not_same_file (previous_view: File.view) = previous_view.file != view.file in
+  panel.previous_views <- List.filter not_same_file panel.previous_views;
+
+  (* Set current view. *)
   panel.view <- view
+
+let set_current_file panel file =
+  match
+    let same_file (view: File.view) = view.file == file in
+    List.find same_file (panel.view :: panel.previous_views)
+  with
+    | view ->
+        set_current_view panel view
+    | exception Not_found ->
+        match file.views with
+          | [] ->
+              set_current_view panel (File.create_view File file)
+          | view :: _ ->
+              set_current_view panel (File.copy_view view)
 
 let kill_current_view panel =
   match panel.previous_views with
