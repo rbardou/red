@@ -144,7 +144,7 @@ let bindings_page state =
 
   (* Local bindings. *)
   header (
-    match state.focus.view.kind with
+    match (State.get_focused_view state).kind with
       | File -> "The following bindings are available because you are editing a file:"
       | Prompt _ -> "The following bindings are available because you are in a prompt:"
       | List_choice _ -> "The following bindings are available because you are choosing from a list:"

@@ -73,6 +73,15 @@ let abort ?exn reason =
 
 let abort ?exn x = Printf.ksprintf (abort ?exn) x
 
+let get_focused_view state =
+  Panel.get_current_view state.focus
+
+let set_focused_view state view =
+  Panel.set_current_view state.focus view
+
+let get_focused_file state =
+  (get_focused_view state).file
+
 let get_context_bindings context state =
   match Context_map.find context state.bindings with
     | exception Not_found ->
@@ -81,7 +90,7 @@ let get_context_bindings context state =
         bindings
 
 let get_context state: Context.t =
-  match state.focus.view.kind with
+  match (get_focused_view state).kind with
     | File -> File
     | Prompt _ -> Prompt
     | List_choice _ -> List_choice
@@ -113,9 +122,9 @@ let on_key_press state (key: Key.t) =
           | exception Not_found ->
               match Key.symbol key with
                 | ASCII char ->
-                    catch (File.replace_selection_by_character (String.make 1 char)) state.focus.view
+                    catch (File.replace_selection_by_character (String.make 1 char)) (get_focused_view state)
                 | Unicode character ->
-                    catch (File.replace_selection_by_character character) state.focus.view
+                    catch (File.replace_selection_by_character character) (get_focused_view state)
                 | Control ->
                     Log.info "unbound key: %s" (Key.show key)
 
@@ -150,7 +159,7 @@ let remove_panel panel state =
 
 let set_focus state focus =
   (
-    match state.focus.view.kind with
+    match (get_focused_view state).kind with
       | Prompt _ ->
           remove_panel state.focus state
       | File | List_choice _ | Help _ ->

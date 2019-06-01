@@ -144,7 +144,7 @@ let move_cursor reset_selection vertical (view: File.view) (cursor: File.cursor)
    Update [preferred_x] unless [vertical].
    Reset selection if [reset_selection]. *)
 let move reset_selection vertical f (state: State.t) =
-  let view = state.focus.view in
+  let view = State.get_focused_view state in
   (
     File.foreach_cursor view @@ fun cursor ->
     move_cursor reset_selection vertical view cursor f
@@ -351,7 +351,7 @@ let choose_from_list ?(default = "") ?(choice = -1) (prompt: string) (choices: s
   let choice_view =
     let file = File.create prompt (Text.of_utf8_string default) in
     let view =
-      let original_view = state.focus.view in
+      let original_view = State.get_focused_view state in
       File.create_view (List_choice { prompt; validate; choices; choice; original_view }) file
     in
     select_all view;
@@ -359,7 +359,7 @@ let choose_from_list ?(default = "") ?(choice = -1) (prompt: string) (choices: s
   in
 
   (* Replace current view with choice view. *)
-  state.focus.view <- choice_view
+  State.set_focused_view state choice_view
 
 let sort_names list =
   let compare_names a b =
@@ -509,7 +509,8 @@ let set_stylist (view: File.view) =
 let () = File.choose_stylist_automatically := set_stylist
 
 let split_panel direction pos (state: State.t) =
-  match state.focus.view.kind with
+  let view = State.get_focused_view state in
+  match view.kind with
     | Prompt _ | List_choice _ | Help _ ->
         (* TODO: create an empty file? *)
         Log.error "cannot split this kind of panel"
@@ -518,7 +519,7 @@ let split_panel direction pos (state: State.t) =
           Layout.replace_panel state.focus (
             Layout.split direction ~pos ~sep: (direction = Horizontal)
               (Layout.single state.focus)
-              (Layout.single (Panel.create (File.copy_view state.focus.view)))
+              (Layout.single (Panel.create (File.copy_view view)))
           ) state.layout
         with
           | None ->
@@ -575,7 +576,7 @@ let help { H.line } =
   line "Follow a link to another help page to get more information."
 
 let () = define "follow_link" ~help Command @@ fun state ->
-  let view = state.focus.view in
+  let view = State.get_focused_view state in
   match view.kind with
     | Help { links } ->
         File.if_only_one_cursor view @@ fun cursor ->
@@ -593,7 +594,7 @@ let help { H.line } =
   line "Exit a prompt to go back to what you were doing."
 
 let () = define "cancel" ~help Command @@ fun state ->
-  match state.focus.view.kind with
+  match (State.get_focused_view state).kind with
     | Help { restore } ->
         (* TODO: if initial layout contains panels which view files which were killed, they need to change view. *)
         restore ()
@@ -601,7 +602,7 @@ let () = define "cancel" ~help Command @@ fun state ->
         State.remove_panel state.focus state
     | List_choice { original_view } ->
         (* TODO: if initial layout contains panels which view files which were killed, they need to change view. *)
-        state.focus.view <- original_view
+        State.set_focused_view state original_view
     | _ ->
         ()
 
@@ -612,7 +613,7 @@ let help { H.line; par; see_also } =
   see_also [ "save_as" ]
 
 let () = define "save" ~help Command @@ fun state ->
-  let file_to_save = state.focus.view.file in
+  let file_to_save = State.get_focused_file state in
   match file_to_save.filename with
     | None ->
         choose_from_file_system "Save as: " state (save file_to_save)
@@ -627,7 +628,7 @@ let help { H.line; par; see_also } =
   see_also [ "save" ]
 
 let () = define "save_as" ~help Command @@ fun state ->
-  let file_to_save = state.focus.view.file in
+  let file_to_save = State.get_focused_file state in
   choose_from_file_system ?default: file_to_save.filename "Save as: " state (save file_to_save)
 
 let help { H.line; par; see_also } =
@@ -642,7 +643,7 @@ let () = define "open" ~help Command @@ fun state ->
   if not (System.file_exists filename) then abort "file does not exist: %S" filename;
   let file = State.create_file_loading state filename in
   let view = File.create_view File file in
-  panel.view <- view
+  Panel.set_current_view panel view
 
 let help { H.line; par; see_also } =
   line "Create a new empty file.";
@@ -654,7 +655,7 @@ let () = define "new" ~help Command @@ fun state ->
   let panel = state.focus in
   let file = State.create_file state "(new file)" Text.empty in
   let view = File.create_view File file in
-  panel.view <- view
+  Panel.set_current_view panel view
 
 let help { H.line; see_also } =
   line "Remove current panel from current layout.";
@@ -904,7 +905,7 @@ let help { H.line; par; see_also } =
   ]
 
 let () = define "select_all" ~help Command @@ fun state ->
-  select_all state.focus.view
+  select_all (State.get_focused_view state)
 
 let help { H.line; par; see_also } =
   line "Give focus to the panel at the right of the current one.";
@@ -951,7 +952,7 @@ let help { H.line; par; see_also } =
   see_also [ "scroll_up" ]
 
 let () = define "scroll_down" ~help Command @@ fun state ->
-  let view = state.focus.view in
+  let view = State.get_focused_view state in
   let text = view.file.text in
 
   (* Scroll. *)
@@ -975,7 +976,7 @@ let help { H.line; par; see_also } =
   see_also [ "scroll_down" ]
 
 let () = define "scroll_up" ~help Command @@ fun state ->
-  let view = state.focus.view in
+  let view = State.get_focused_view state in
 
   (* Scroll. *)
   let old_scroll = view.scroll_y in
@@ -991,7 +992,7 @@ let help { H.line; par; see_also } =
   line "Cursor moves to the beginning of this new line."
 
 let () = define "insert_new_line" ~help Command @@ fun state ->
-  let view = state.focus.view in
+  let view = State.get_focused_view state in
   File.replace_selection_by_new_line view;
   File.recenter_if_needed view
 
@@ -1008,7 +1009,7 @@ let help { H.line; par; see_also } =
   ]
 
 let () = define "delete_character" ~help Command @@ fun state ->
-  let view = state.focus.view in
+  let view = State.get_focused_view state in
   File.delete_selection_or_character view;
   File.recenter_if_needed view
 
@@ -1025,7 +1026,7 @@ let help { H.line; par; see_also } =
   ]
 
 let () = define "delete_character_backwards" ~help Command @@ fun state ->
-  let view = state.focus.view in
+  let view = State.get_focused_view state in
   File.delete_selection_or_character_backwards view;
   File.recenter_if_needed view
 
@@ -1039,7 +1040,7 @@ let help { H.line; par; see_also } =
   ]
 
 let () = define "delete_end_of_line" ~help Command @@ fun state ->
-  let view = state.focus.view in
+  let view = State.get_focused_view state in
   (
     File.delete_from_cursors view @@ fun text cursor ->
     (* Cannot just use [move_end_of_line] here because we want to delete the \n if we are at the end of the line. *)
@@ -1064,7 +1065,7 @@ let help { H.line; par; see_also } =
   ]
 
 let () = define "delete_end_of_word" ~help Command @@ fun state ->
-  let view = state.focus.view in
+  let view = State.get_focused_view state in
   (
     File.delete_from_cursors view @@ fun text cursor ->
     move_right_word text cursor.position.x cursor.position.y
@@ -1082,7 +1083,7 @@ let help { H.line; par; see_also } =
   ]
 
 let () = define "delete_beginning_of_word" ~help Command @@ fun state ->
-  let view = state.focus.view in
+  let view = State.get_focused_view state in
   (
     File.delete_from_cursors view @@ fun text cursor ->
     move_left_word text cursor.position.x cursor.position.y
@@ -1106,7 +1107,7 @@ let help { H.add; line; nl; par; add_link } =
   add "Other commands, such as "; add_link "save_as"; add ", are only run once."; nl ()
 
 let () = define "create_cursors_from_selection" ~help Command @@ fun state ->
-  let view = state.focus.view in
+  let view = State.get_focused_view state in
   match view.cursors with
     | [] ->
         ()
@@ -1144,14 +1145,14 @@ let help { H.add; line; nl; par; add_link; see_also } =
   line "the selection of each cursor is copied to the local clipboard of each cursor.";
   see_also [ "cut"; "paste" ]
 
-let () = define "copy" ~help Command @@ fun state -> File.copy state.clipboard state.focus.view
+let () = define "copy" ~help Command @@ fun state -> File.copy state.clipboard (State.get_focused_view state)
 
 let help { H.add; line; nl; par; add_link; see_also } =
   line "Copy selection to clipboard, then delete selection.";
   see_also [ "copy"; "paste" ]
 
 let () = define "cut" ~help Command @@ fun state ->
-  let view = state.focus.view in
+  let view = State.get_focused_view state in
   File.cut state.clipboard view;
   File.recenter_if_needed view
 
@@ -1167,7 +1168,7 @@ let help { H.add; line; nl; par; add_link; see_also } =
   see_also [ "cut"; "paste" ]
 
 let () = define "paste" ~help Command @@ fun state ->
-  let view = state.focus.view in
+  let view = State.get_focused_view state in
   File.paste state.clipboard view;
   File.recenter_if_needed view
 
@@ -1177,7 +1178,7 @@ let help { H.add; line; nl; par; add_link; see_also } =
   line "You can undo repeatedly until the point where the current file was last saved.";
   see_also [ "redo" ]
 
-let () = define "undo" ~help Command @@ fun state -> File.undo state.focus.view.file
+let () = define "undo" ~help Command @@ fun state -> File.undo (State.get_focused_file state)
 
 let help { H.add; line; nl; par; add_link; see_also } =
   line "Redo what was recently undone.";
@@ -1188,7 +1189,7 @@ let help { H.add; line; nl; par; add_link; see_also } =
   line "Any edit which is not a redo or an undo will remove the possibility to redo.";
   see_also [ "undo" ]
 
-let () = define "redo" ~help Command @@ fun state -> File.redo state.focus.view.file
+let () = define "redo" ~help Command @@ fun state -> File.redo (State.get_focused_file state)
 
 let help { H.add; line; nl; par; add_link; see_also } =
   line "Validate selected choice.";
@@ -1202,15 +1203,16 @@ let help { H.add; line; nl; par; add_link; see_also } =
 
 let () = define "validate" ~help Command @@ fun state ->
   let panel = state.focus in
-  match panel.view.kind with
+  let view = Panel.get_current_view panel in
+  match view.kind with
     | Prompt { validate } ->
         State.remove_panel panel state;
-        validate (Text.to_string panel.view.file.text)
+        validate (Text.to_string view.file.text)
     | List_choice { validate; original_view; choice; choices } ->
-        let filter = Text.to_string panel.view.file.text in
-        panel.view <- original_view;
+        let filter = Text.to_string view.file.text in
+        Panel.set_current_view panel original_view;
         (
-          match List.nth (Panel.filter_choices filter choices) choice with
+          match List.nth (filter_choices filter choices) choice with
             | exception (Invalid_argument _ | Failure _) ->
                 validate filter
             | choice ->
@@ -1249,7 +1251,7 @@ let () = define "execute_process" ~help Command @@ fun state ->
         ()
     | program :: arguments ->
         let file = State.create_file state ("<" ^ command ^ ">") Text.empty in
-        panel.view <- File.create_view File file;
+        Panel.set_current_view panel (File.create_view File file);
         File.create_process file program arguments
 
 let help { H.line; par; see_also } =
@@ -1274,7 +1276,7 @@ let () = define "switch_file" ~help Command @@ fun state ->
             | head :: _ ->
                 head
         in
-        panel.view <- view
+        Panel.set_current_view panel view
 
 let help { H.line; add; nl; add_link; par; see_also } =
   line "Select the item above the currently selected one.";
@@ -1286,9 +1288,10 @@ let help { H.line; add; nl; add_link; par; see_also } =
   see_also [ "choose_previous" ]
 
 let () = define "choose_next" ~help Command @@ fun state ->
-  match state.focus.view.kind with
+  let view = State.get_focused_view state in
+  match view.kind with
     | List_choice choice ->
-        let choices = Panel.filter_choices (Text.to_string state.focus.view.file.text) choice.choices in
+        let choices = filter_choices (Text.to_string view.file.text) choice.choices in
         choice.choice <- choice.choice + 1;
         let max_choice = List.length choices - 1 in
         if choice.choice > max_choice then choice.choice <- max_choice
@@ -1305,7 +1308,7 @@ let help { H.line; add; nl; add_link; par; see_also } =
   see_also [ "choose_next" ]
 
 let () = define "choose_previous" ~help Command @@ fun state ->
-  match state.focus.view.kind with
+  match (State.get_focused_view state).kind with
     | List_choice choice ->
         choice.choice <- choice.choice - 1;
         if choice.choice < -1 then choice.choice <- -1
