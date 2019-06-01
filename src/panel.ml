@@ -20,6 +20,15 @@ let get_current_view panel =
 let set_current_view panel view =
   panel.view <- view
 
+let kill_current_view panel =
+  match panel.previous_views with
+    | head :: tail ->
+        panel.view <- head;
+        panel.previous_views <- tail;
+        true
+    | [] ->
+        false
+
 let create view =
   {
     view;

@@ -424,24 +424,10 @@ let choose_from_file_system ?default (prompt: string) (state: State.t) (validate
 
 let display_help (state: State.t) make_page =
   let topic, text, style, links = make_page state in
-
-  (* Create help panel. *)
-  let help_panel =
-    let file = File.create ~read_only: true "help" text in (* TODO: include topic in name? *)
-    let initial_layout = state.layout in
-    let initial_focus = state.focus in
-    let restore () =
-      State.set_layout state initial_layout;
-      State.set_focus state initial_focus;
-    in
-    let view = File.create_view (Help { topic; restore; links }) file in
-    view.style <- style;
-    Panel.create view
-  in
-
-  (* Replace layout. *)
-  State.set_layout state (Layout.single help_panel);
-  State.set_focus state help_panel
+  let file = File.create ~read_only: true "help" text in (* TODO: include topic in name? *)
+  let view = File.create_view (Help { topic; links }) file in
+  view.style <- style;
+  State.set_focused_view state view
 
 let ocaml_stylist =
   File.Stylist_module {
@@ -576,10 +562,9 @@ let () = define "cancel" ~help Command @@ fun state ->
         view.prompt <- None
     | None ->
         match view.kind with
-          | Help { restore } ->
-              (* TODO: if initial layout contains panels which view files which were killed,
-                 they need to change view. *)
-              restore ()
+          | Help _ ->
+              if not (Panel.kill_current_view state.focus) then
+                Log.error "cannot kill last view of panel" (* TODO: create new file? *)
           | List_choice { original_view } ->
               (* TODO: if initial layout contains panels which view files which were killed,
                  they need to change view. *)

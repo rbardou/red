@@ -14,6 +14,12 @@ val get_current_view: t -> File.view
 (** Set the current view of a panel. *)
 val set_current_view: t -> File.view -> unit
 
+(** Switch to previous view and forget about the current one.
+
+    Cannot do that with the last view.
+    Return [false] if this was the last view. *)
+val kill_current_view: t -> bool
+
 (** Create a panel with an initial view. *)
 val create: File.view -> t
 
