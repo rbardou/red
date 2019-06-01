@@ -129,10 +129,10 @@ let main () =
   Ctrl_y => "redo";
   Ctrl_g => "cancel";
 
-  Ctrl_o => "open";
-  F2 => "switch_file"; (* TODO: merge with Ctrl+O? *)
+  F2 => "new";
+  F3 => "switch_file";
+  Alt_f3 => "open";
   F4 => "close_file";
-  Ctrl_n => "new";
   Alt_letter_x => "execute_command";
   Alt_ctrl_x => "execute_process";
   Alt_ctrl_v => "split_panel_vertically";

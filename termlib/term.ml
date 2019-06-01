@@ -541,6 +541,73 @@ let input_char state char: input_state =
     | Escape_bracket_semi (6, 7), '~' -> Done Ctrl_alt_page_down
     | Escape_bracket_semi (6, 8), '~' -> Done Ctrl_alt_shift_page_down
 
+    | Escape_O 0, 'P' -> Done F1
+    | Escape_O_semi (1, 2), 'P' -> Done Shift_f1
+    | Escape_O_semi (1, 3), 'P' -> Done Alt_f1
+    | Escape_O_semi (1, 4), 'P' -> Done Alt_shift_f1
+    | Escape_O_semi (1, 5), 'P' -> Done Ctrl_f1
+    | Escape_O_semi (1, 6), 'P' -> Done Ctrl_shift_f1
+    | Escape_O_semi (1, 7), 'P' -> Done Ctrl_alt_f1
+    | Escape_O_semi (1, 8), 'P' -> Done Ctrl_alt_shift_f1
+    | Escape_bracket_semi (1, 2), 'P' -> Done Shift_f1
+    | Escape_bracket_semi (1, 3), 'P' -> Done Alt_f1
+    | Escape_bracket_semi (1, 4), 'P' -> Done Alt_shift_f1
+    | Escape_bracket_semi (1, 5), 'P' -> Done Ctrl_f1
+    | Escape_bracket_semi (1, 6), 'P' -> Done Ctrl_shift_f1
+    | Escape_bracket_semi (1, 7), 'P' -> Done Ctrl_alt_f1
+    | Escape_bracket_semi (1, 8), 'P' -> Done Ctrl_alt_shift_f1
+
+    | Escape_O 0, 'Q' -> Done F2
+    | Escape_O_semi (1, 2), 'Q' -> Done Shift_f2
+    | Escape_O_semi (1, 3), 'Q' -> Done Alt_f2
+    | Escape_O_semi (1, 4), 'Q' -> Done Alt_shift_f2
+    | Escape_O_semi (1, 5), 'Q' -> Done Ctrl_f2
+    | Escape_O_semi (1, 6), 'Q' -> Done Ctrl_shift_f2
+    | Escape_O_semi (1, 7), 'Q' -> Done Ctrl_alt_f2
+    | Escape_O_semi (1, 8), 'Q' -> Done Ctrl_alt_shift_f2
+    | Escape_bracket_semi (1, 2), 'Q' -> Done Shift_f2
+    | Escape_bracket_semi (1, 3), 'Q' -> Done Alt_f2
+    | Escape_bracket_semi (1, 4), 'Q' -> Done Alt_shift_f2
+    | Escape_bracket_semi (1, 5), 'Q' -> Done Ctrl_f2
+    | Escape_bracket_semi (1, 6), 'Q' -> Done Ctrl_shift_f2
+    | Escape_bracket_semi (1, 7), 'Q' -> Done Ctrl_alt_f2
+    | Escape_bracket_semi (1, 8), 'Q' -> Done Ctrl_alt_shift_f2
+
+    | Escape_O 0, 'R' -> Done F3
+    | Escape_O_semi (1, 2), 'R' -> Done Shift_f3
+    | Escape_O_semi (1, 3), 'R' -> Done Alt_f3
+    | Escape_O_semi (1, 4), 'R' -> Done Alt_shift_f3
+    | Escape_O_semi (1, 5), 'R' -> Done Ctrl_f3
+    | Escape_O_semi (1, 6), 'R' -> Done Ctrl_shift_f3
+    | Escape_O_semi (1, 7), 'R' -> Done Ctrl_alt_f3
+    | Escape_O_semi (1, 8), 'R' -> Done Ctrl_alt_shift_f3
+    | Escape_bracket_semi (1, 2), 'R' -> Done Shift_f3
+    | Escape_bracket_semi (1, 3), 'R' -> Done Alt_f3
+    | Escape_bracket_semi (1, 4), 'R' -> Done Alt_shift_f3
+    | Escape_bracket_semi (1, 5), 'R' -> Done Ctrl_f3
+    | Escape_bracket_semi (1, 6), 'R' -> Done Ctrl_shift_f3
+    | Escape_bracket_semi (1, 7), 'R' -> Done Ctrl_alt_f3
+    | Escape_bracket_semi (1, 8), 'R' -> Done Ctrl_alt_shift_f3
+
+    (* Assume that if y = 1 and x is between 2 and 8, user is pressing F3 instead. *)
+    | Escape_bracket_semi (y, x), 'R' -> Cursor_position (x, y)
+
+    | Escape_O 0, 'S' -> Done F4
+    | Escape_O_semi (1, 2), 'S' -> Done Shift_f4
+    | Escape_O_semi (1, 3), 'S' -> Done Alt_f4
+    | Escape_O_semi (1, 4), 'S' -> Done Alt_shift_f4
+    | Escape_O_semi (1, 5), 'S' -> Done Ctrl_f4
+    | Escape_O_semi (1, 6), 'S' -> Done Ctrl_shift_f4
+    | Escape_O_semi (1, 7), 'S' -> Done Ctrl_alt_f4
+    | Escape_O_semi (1, 8), 'S' -> Done Ctrl_alt_shift_f4
+    | Escape_bracket_semi (1, 2), 'S' -> Done Shift_f4
+    | Escape_bracket_semi (1, 3), 'S' -> Done Alt_f4
+    | Escape_bracket_semi (1, 4), 'S' -> Done Alt_shift_f4
+    | Escape_bracket_semi (1, 5), 'S' -> Done Ctrl_f4
+    | Escape_bracket_semi (1, 6), 'S' -> Done Ctrl_shift_f4
+    | Escape_bracket_semi (1, 7), 'S' -> Done Ctrl_alt_f4
+    | Escape_bracket_semi (1, 8), 'S' -> Done Ctrl_alt_shift_f4
+
     | Escape_bracket 15, '~' -> Done F5
     | Escape_bracket_semi (15, 2), '~' -> Done Shift_f5
     | Escape_bracket_semi (15, 3), '~' -> Done Alt_f5
@@ -613,8 +680,6 @@ let input_char state char: input_state =
     | Escape_bracket_semi (24, 7), '~' -> Done Ctrl_alt_f12
     | Escape_bracket_semi (24, 8), '~' -> Done Ctrl_alt_shift_f12
 
-    | Escape_bracket_semi (y, x), 'R' -> Cursor_position (x, y)
-
     (* Escape sequences with O. *)
     | Escape_O x, ('0' .. '9' as digit) ->
         Escape_O (x * 10 + Char.code digit - Char.code '0')
@@ -640,42 +705,6 @@ let input_char state char: input_state =
     (* | Escape_O_semi (1, 6), 'F' -> Done Ctrl_shift_end *)
     (* | Escape_O_semi (1, 7), 'F' -> Done Ctrl_alt_end *)
     (* | Escape_O_semi (1, 8), 'F' -> Done Ctrl_alt_shift_end *)
-
-    | Escape_O 0, 'P' -> Done F1
-    | Escape_O_semi (1, 2), 'P' -> Done Shift_f1
-    | Escape_O_semi (1, 3), 'P' -> Done Alt_f1
-    | Escape_O_semi (1, 4), 'P' -> Done Alt_shift_f1
-    | Escape_O_semi (1, 5), 'P' -> Done Ctrl_f1
-    | Escape_O_semi (1, 6), 'P' -> Done Ctrl_shift_f1
-    | Escape_O_semi (1, 7), 'P' -> Done Ctrl_alt_f1
-    | Escape_O_semi (1, 8), 'P' -> Done Ctrl_alt_shift_f1
-
-    | Escape_O 0, 'Q' -> Done F2
-    | Escape_O_semi (1, 2), 'Q' -> Done Shift_f2
-    | Escape_O_semi (1, 3), 'Q' -> Done Alt_f2
-    | Escape_O_semi (1, 4), 'Q' -> Done Alt_shift_f2
-    | Escape_O_semi (1, 5), 'Q' -> Done Ctrl_f2
-    | Escape_O_semi (1, 6), 'Q' -> Done Ctrl_shift_f2
-    | Escape_O_semi (1, 7), 'Q' -> Done Ctrl_alt_f2
-    | Escape_O_semi (1, 8), 'Q' -> Done Ctrl_alt_shift_f2
-
-    | Escape_O 0, 'R' -> Done F3
-    | Escape_O_semi (1, 2), 'R' -> Done Shift_f3
-    | Escape_O_semi (1, 3), 'R' -> Done Alt_f3
-    | Escape_O_semi (1, 4), 'R' -> Done Alt_shift_f3
-    | Escape_O_semi (1, 5), 'R' -> Done Ctrl_f3
-    | Escape_O_semi (1, 6), 'R' -> Done Ctrl_shift_f3
-    | Escape_O_semi (1, 7), 'R' -> Done Ctrl_alt_f3
-    | Escape_O_semi (1, 8), 'R' -> Done Ctrl_alt_shift_f3
-
-    | Escape_O 0, 'S' -> Done F4
-    | Escape_O_semi (1, 2), 'S' -> Done Shift_f4
-    | Escape_O_semi (1, 3), 'S' -> Done Alt_f4
-    | Escape_O_semi (1, 4), 'S' -> Done Alt_shift_f4
-    | Escape_O_semi (1, 5), 'S' -> Done Ctrl_f4
-    | Escape_O_semi (1, 6), 'S' -> Done Ctrl_shift_f4
-    | Escape_O_semi (1, 7), 'S' -> Done Ctrl_alt_f4
-    | Escape_O_semi (1, 8), 'S' -> Done Ctrl_alt_shift_f4
 
     (* Unicode. *)
     | Empty, '\128' .. '\191' -> Invalid (state, char)
