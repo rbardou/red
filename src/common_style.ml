@@ -1,3 +1,5 @@
+let focus = Style.make ~fg: Black ~bg: Red ()
+
 let literal = Style.make ~fg: Cyan ()
 let other = Style.make ~fg: Yellow ()
 let invalid = Style.make ~fg: Red ()

@@ -66,7 +66,7 @@ let render_view
 
 let make_status_bar_style has_focus =
   if has_focus then
-    Style.make ~bg: Cyan ~fg: Black ()
+    Common_style.focus
   else
     Style.make ~bg: White ~fg: Black ()
 
@@ -126,7 +126,7 @@ let render_prompt has_focus (frame: Render.frame) view prompt ~x ~y ~w =
   (* Render prompt. *)
   let style =
     if has_focus then
-      Style.make ~bg: Cyan ~fg: Black ()
+      Common_style.focus
     else
       Style.make ~bg: White ~fg: Black ()
   in
@@ -185,7 +185,7 @@ let render focused_panel (frame: Render.frame) panel ~x ~y ~w ~h =
   let render_view ~x ~y ~w ~h =
     let cursor_style =
       if has_focus then
-        Style.make ~fg: Black ~bg: Cyan ()
+        Common_style.focus
       else
         Style.make ~fg: Black ~bg: Yellow ()
     in
