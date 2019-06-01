@@ -326,10 +326,7 @@ let choose_from_list ?(default = "") ?(choice = -1) (choice_prompt_text: string)
   (* Create choice file and view. *)
   let choice_view =
     let file = File.create choice_prompt_text (Text.of_utf8_string default) in
-    let view =
-      let original_view = State.get_focused_main_view state in
-      File.create_view (List_choice { choice_prompt_text; validate_choice; choices; choice; original_view }) file
-    in
+    let view = File.create_view (List_choice { choice_prompt_text; validate_choice; choices; choice }) file in
     select_all view;
     view
   in
@@ -470,24 +467,30 @@ let set_stylist (view: File.view) =
 
 let () = File.choose_stylist_automatically := set_stylist
 
+let create_empty_view (state: State.t) =
+  let file = State.create_file state "(new file)" Text.empty in
+  File.create_view File file
+
 let split_panel direction pos (state: State.t) =
   let view = State.get_focused_main_view state in
-  match view.kind with
-    | Prompt | List_choice _ | Help _ ->
-        (* TODO: create an empty file? *)
-        Log.error "cannot split this kind of panel"
-    | File ->
-        match
-          Layout.replace_panel state.focus (
-            Layout.split direction ~pos ~sep: (direction = Horizontal)
-              (Layout.single state.focus)
-              (Layout.single (Panel.create (File.copy_view view)))
-          ) state.layout
-        with
-          | None ->
-              Log.error "failed to replace current panel: panel not found in current layout"
-          | Some new_layout ->
-              State.set_layout state new_layout
+  let new_view =
+    match view.kind with
+      | Prompt | List_choice _ | Help _ ->
+          create_empty_view state
+      | File ->
+          File.copy_view view
+  in
+  match
+    Layout.replace_panel state.focus (
+      Layout.split direction ~pos ~sep: (direction = Horizontal)
+        (Layout.single state.focus)
+        (Layout.single (Panel.create new_view))
+    ) state.layout
+  with
+    | None ->
+        Log.error "failed to replace current panel: panel not found in current layout"
+    | Some new_layout ->
+        State.set_layout state new_layout
 
 (******************************************************************************)
 (*                                 Definitions                                *)
@@ -562,13 +565,10 @@ let () = define "cancel" ~help Command @@ fun state ->
         view.prompt <- None
     | None ->
         match view.kind with
-          | Help _ ->
+          | Help _ | List_choice _ ->
               if not (Panel.kill_current_view state.focus) then
-                Log.error "cannot kill last view of panel" (* TODO: create new file? *)
-          | List_choice { original_view } ->
-              (* TODO: if initial layout contains panels which view files which were killed,
-                 they need to change view. *)
-              State.set_focused_view state original_view
+                let view = create_empty_view state in
+                State.set_focused_view state view
           | _ ->
               ()
 
@@ -618,10 +618,8 @@ let help { H.line; par; see_also } =
   see_also [ "open"; "switch_file" ]
 
 let () = define "new" ~help Command @@ fun state ->
-  let panel = state.focus in
-  let file = State.create_file state "(new file)" Text.empty in
-  let view = File.create_view File file in
-  Panel.set_current_view panel view
+  let view = create_empty_view state in
+  State.set_focused_view state view
 
 let help { H.line; see_also } =
   line "Remove current panel from current layout.";
@@ -1176,9 +1174,16 @@ let () = define "validate" ~help Command @@ fun state ->
         validate_prompt (Text.to_string prompt_view.file.text)
     | None ->
         match view.kind with
-          | List_choice { validate_choice; original_view; choice; choices } ->
+          | List_choice { validate_choice; choice; choices } ->
               let filter = Text.to_string view.file.text in
-              Panel.set_current_view panel original_view;
+              if not (Panel.kill_current_view panel) then
+                (* User killed the file from which we spawned the list choice?
+                   This should be a rare occurrence. *)
+                (* TODO: if validation results in opening a file, do not create a new empty file *)
+                (
+                  let view = create_empty_view state in
+                  Panel.set_current_view panel view;
+                );
               (
                 match List.nth (filter_choices filter choices) choice with
                   | exception (Invalid_argument _ | Failure _) ->

@@ -191,7 +191,6 @@ and choice =
     validate_choice: string -> unit;
     choices: string list;
     mutable choice: int; (* among choices that match the filter *)
-    original_view: view;
   }
 
 and help =
