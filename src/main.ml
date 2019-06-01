@@ -99,6 +99,16 @@ let main () =
   Alt_down => "focus_down";
   Alt_up => "focus_up";
 
+  Ctrl_alt_right => "swap_view_right";
+  Ctrl_alt_left => "swap_view_left";
+  Ctrl_alt_down => "swap_view_down";
+  Ctrl_alt_up => "swap_view_up";
+
+  Alt_shift_right => "copy_view_right";
+  Alt_shift_left => "copy_view_left";
+  Alt_shift_down => "copy_view_down";
+  Alt_shift_up => "copy_view_up";
+
   Page_down => "scroll_down";
   Page_up => "scroll_up";
 

@@ -248,6 +248,23 @@ let focus_relative get (state: State.t) =
     | Some panel ->
         State.set_focus state panel
 
+let swap_view_relative get (state: State.t) =
+  match get state.focus state.layout with
+    | None ->
+        ()
+    | Some panel ->
+        let panel_view = Panel.get_current_main_view panel in
+        Panel.set_current_view panel (File.copy_view (Panel.get_current_main_view state.focus));
+        Panel.set_current_view state.focus (File.copy_view panel_view);
+        State.set_focus state panel
+
+let copy_view_relative get (state: State.t) =
+  match get state.focus state.layout with
+    | None ->
+        ()
+    | Some panel ->
+        Panel.set_current_view panel (File.copy_view (Panel.get_current_main_view state.focus))
+
 let move_after_scroll (view: File.view) old_scroll =
   let delta = view.scroll_y - old_scroll in
   let text = view.file.text in
@@ -883,7 +900,11 @@ let help { H.line; par; see_also } =
   par ();
   line "Commands which act on a view act on the view of the focused panel.";
   line "Only one panel has focus at a given time.";
-  see_also [ "focus_left"; "focus_down"; "focus_up"; "split_panel_horizontally" ]
+  see_also [
+    "focus_left"; "focus_down"; "focus_up";
+    "swap_view_right"; "copy_view_right";
+    "split_panel_horizontally";
+  ]
 
 let () = define "focus_right" ~help Command @@ focus_relative Layout.get_panel_right
 
@@ -892,7 +913,11 @@ let help { H.line; par; see_also } =
   par ();
   line "Commands which act on a view act on the view of the focused panel.";
   line "Only one panel has focus at a given time.";
-  see_also [ "focus_right"; "focus_down"; "focus_up"; "split_panel_horizontally" ]
+  see_also [
+    "focus_right"; "focus_down"; "focus_up";
+    "swap_view_left"; "copy_view_left";
+    "split_panel_horizontally";
+  ]
 
 let () = define "focus_left" ~help Command @@ focus_relative Layout.get_panel_left
 
@@ -901,7 +926,11 @@ let help { H.line; par; see_also } =
   par ();
   line "Commands which act on a view act on the view of the focused panel.";
   line "Only one panel has focus at a given time.";
-  see_also [ "focus_right"; "focus_left"; "focus_up"; "split_panel_vertically" ]
+  see_also [
+    "focus_right"; "focus_left"; "focus_up";
+    "swap_view_down"; "copy_view_down";
+    "split_panel_vertically";
+  ]
 
 let () = define "focus_down" ~help Command @@ focus_relative Layout.get_panel_down
 
@@ -910,9 +939,93 @@ let help { H.line; par; see_also } =
   par ();
   line "Commands which act on a view act on the view of the focused panel.";
   line "Only one panel has focus at a given time.";
-  see_also [ "focus_right"; "focus_left"; "focus_down"; "split_panel_vertically" ]
+  see_also [
+    "focus_right"; "focus_left"; "focus_down";
+    "swap_view_up"; "copy_view_up";
+    "split_panel_vertically";
+  ]
 
 let () = define "focus_up" ~help Command @@ focus_relative Layout.get_panel_up
+
+let help { H.line; par; see_also } =
+  line "Exchange the views of the current panel and the panel at its right.";
+  see_also [
+    "swap_view_left"; "swap_view_down"; "swap_view_up";
+    "copy_view_right";
+    "focus_right"; "split_panel_horizontally";
+  ]
+
+let () = define "swap_view_right" ~help Command @@ swap_view_relative Layout.get_panel_right
+
+let help { H.line; par; see_also } =
+  line "Exchange the views of the current panel and the panel at its left.";
+  see_also [
+    "swap_view_right"; "swap_view_down"; "swap_view_up";
+    "copy_view_left";
+    "focus_left"; "split_panel_horizontally";
+  ]
+
+let () = define "swap_view_left" ~help Command @@ swap_view_relative Layout.get_panel_left
+
+let help { H.line; par; see_also } =
+  line "Exchange the views of the current panel and the panel below it.";
+  see_also [
+    "swap_view_up"; "swap_view_right"; "swap_view_left";
+    "copy_view_down";
+    "focus_down"; "split_panel_vertically";
+  ]
+
+let () = define "swap_view_down" ~help Command @@ swap_view_relative Layout.get_panel_down
+
+let help { H.line; par; see_also } =
+  line "Exchange the views of the current panel and the panel above it.";
+  see_also [
+    "swap_view_down"; "swap_view_right"; "swap_view_left";
+    "copy_view_up";
+    "focus_up"; "split_panel_vertically";
+  ]
+
+let () = define "swap_view_up" ~help Command @@ swap_view_relative Layout.get_panel_up
+
+let help { H.line; par; see_also } =
+  line "Copy current view into the panel at its right.";
+  see_also [
+    "copy_view_left"; "copy_view_down"; "copy_view_up";
+    "swap_view_right";
+    "focus_right"; "split_panel_horizontally";
+  ]
+
+let () = define "copy_view_right" ~help Command @@ copy_view_relative Layout.get_panel_right
+
+let help { H.line; par; see_also } =
+  line "Copy current view into the panel at its left.";
+  see_also [
+    "copy_view_right"; "copy_view_down"; "copy_view_up";
+    "swap_view_left";
+    "focus_left"; "split_panel_horizontally";
+  ]
+
+let () = define "copy_view_left" ~help Command @@ copy_view_relative Layout.get_panel_left
+
+let help { H.line; par; see_also } =
+  line "Copy current view into the panel below it.";
+  see_also [
+    "copy_view_up"; "copy_view_right"; "copy_view_left";
+    "swap_view_down";
+    "focus_down"; "split_panel_vertically";
+  ]
+
+let () = define "copy_view_down" ~help Command @@ copy_view_relative Layout.get_panel_down
+
+let help { H.line; par; see_also } =
+  line "Copy current view into the panel above it.";
+  see_also [
+    "copy_view_down"; "copy_view_right"; "copy_view_left";
+    "swap_view_up";
+    "focus_up"; "split_panel_vertically";
+  ]
+
+let () = define "copy_view_up" ~help Command @@ copy_view_relative Layout.get_panel_up
 
 let help { H.line; par; see_also } =
   line "Scroll half a page down.";
