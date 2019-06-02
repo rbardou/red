@@ -97,7 +97,7 @@ let get_context_bindings context state =
 let get_context state: Context.t =
   match (get_focused_view state).kind with
     | Prompt -> Prompt
-    | Search -> Search
+    | Search _ -> Search
     | File -> File
     | List_choice _ -> List_choice
     | Help _ -> Help

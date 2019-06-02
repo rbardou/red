@@ -210,7 +210,7 @@ and help =
 and view_kind =
   | File
   | Prompt
-  | Search
+  | Search of { case_sensitive: bool }
   | List_choice of choice
   | Help of help
 

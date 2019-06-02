@@ -11,6 +11,7 @@ type command = State.t -> unit
 (** Description of type ['f], which, if it is a function, eventually returns a value of type ['r]. *)
 type ('f, 'r) typ =
   | Unit: (unit, unit) typ
+  | Bool: (bool, bool) typ
   | Int: (int, int) typ
   | Float: (float, float) typ
   | String: (string, string) typ
@@ -63,16 +64,21 @@ let empty_env =
     types =
       String_map.empty
       |> String_map.add "unit" (Type Unit)
+      |> String_map.add "bool" (Type Bool)
       |> String_map.add "int" (Type Int)
       |> String_map.add "float" (Type Float)
       |> String_map.add "string" (Type String)
       |> String_map.add "command" (Type Command);
     commands = String_map.empty;
-    variables = String_map.empty;
+    variables =
+      String_map.empty
+      |> String_map.add "true" (List (Bool, [ Partial { typ = Bool; value = Constant true } ]))
+      |> String_map.add "false" (List (Bool, [ Partial { typ = Bool; value = Constant false } ]));
   }
 
 let rec get_return_type: type f r. (f, r) typ -> (r, r) typ = function
   | Unit -> Unit
+  | Bool -> Bool
   | Int -> Int
   | Float -> Float
   | String -> String
@@ -85,6 +91,7 @@ type (_, _) type_equality =
 
 let rec show_type: type f r. bool -> (f, r) typ -> string = fun parentheses -> function
   | Unit -> "unit"
+  | Bool -> "bool"
   | Int -> "int"
   | Float -> "float"
   | String -> "string"
@@ -97,6 +104,7 @@ let rec show_type: type f r. bool -> (f, r) typ -> string = fun parentheses -> f
 
 let rec dummy: type f r. (f, r) typ -> f = function
   | Unit -> ()
+  | Bool -> false
   | Int -> 0
   | Float -> 0.
   | String -> ""
@@ -107,6 +115,8 @@ let rec equal_types: type a b c d. (a, c) typ -> (b, d) typ -> (a, b) type_equal
   match a, b with
     | Unit, Unit -> Yes
     | Unit, _ -> No
+    | Bool, Bool -> Yes
+    | Bool, _ -> No
     | Int, Int -> Yes
     | Int, _ -> No
     | Float, Float -> Yes
@@ -156,6 +166,8 @@ let rec check_instance: type r. packed list -> r partial -> r expression list = 
   match arguments, definition.typ with
     | [], Unit ->
         [ definition.value ]
+    | [], Bool ->
+        [ definition.value ]
     | [], Int ->
         [ definition.value ]
     | [], Float ->
@@ -167,6 +179,8 @@ let rec check_instance: type r. packed list -> r partial -> r expression list = 
     | [], Function _ ->
         [] (* missing argument *)
     | _ :: _, Unit ->
+        [] (* too many arguments *)
+    | _ :: _, Bool ->
         [] (* too many arguments *)
     | _ :: _, Int ->
         [] (* too many arguments *)
@@ -238,6 +252,8 @@ let rec check_expression (env: env) (expression: Ast.expression Ast.located): pa
                 match f.typ with
                   | Unit ->
                       error expression.loc "unit is not a function"
+                  | Bool ->
+                      error expression.loc "booleans are not functions"
                   | Int ->
                       error expression.loc "integers are not functions"
                   | Float ->

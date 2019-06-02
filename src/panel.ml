@@ -29,7 +29,7 @@ let set_current_view panel (view: File.view) =
     match panel.view.kind with
       | File ->
           panel.previous_views <- panel.view :: panel.previous_views
-      | Prompt | Search | List_choice _ | Help _ ->
+      | Prompt | Search _ | List_choice _ | Help _ ->
           ()
   );
 
@@ -257,11 +257,18 @@ let render focused_panel (frame: Render.frame) panel ~x ~y ~w ~h =
       | None ->
           h
       | Some { search_view } ->
-          render_prompt has_focus frame search_view "Search for: " ~x ~y: (y + h - 1) ~w;
+          let case_sensitive =
+            match search_view.kind with
+              | Search { case_sensitive } -> case_sensitive
+              | _ -> false (* weird *)
+          in
+          render_prompt has_focus frame search_view
+            (if case_sensitive then "Search for (case-sensitive): " else "Search for: ")
+            ~x ~y: (y + h - 1) ~w;
           h - 1
   in
   match panel.view.kind with
-    | Prompt | Search ->
+    | Prompt | Search _ ->
         (* Do not render these directly, always render their parent view. *)
         invalid_arg "Panel.render: Prompt"
 

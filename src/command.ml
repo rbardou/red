@@ -488,7 +488,7 @@ let split_panel direction pos (state: State.t) =
   let view = State.get_focused_main_view state in
   let new_view =
     match view.kind with
-      | Prompt | Search | List_choice _ | Help _ ->
+      | Prompt | Search _ | List_choice _ | Help _ ->
           State.get_default_view state
       | File ->
           File.copy_view view
@@ -590,7 +590,7 @@ let () = define "cancel" ~help Command @@ fun state ->
                     view.cursors <- [ first ]
                 | _ ->
                     match view.kind with
-                      | Prompt | Search | Help _ | List_choice _ ->
+                      | Prompt | Search _ | Help _ | List_choice _ ->
                           if not (Panel.kill_current_view state.focus) then
                             let view = State.get_default_view state in
                             State.set_focused_view state view
@@ -1480,7 +1480,7 @@ let () = define "split_panel_horizontally" ~help ("position" -: Float @-> Comman
 let help { H.line } =
   line "Search for fixed text."
 
-let () = define "search" ~help Command @@ fun state ->
+let () = define "search" ~help ("case_sensitive" -: Bool @-> Command) @@ fun case_sensitive state ->
   let view = State.get_focused_main_view state in
 
   (* Set starting position. *)
@@ -1492,7 +1492,7 @@ let () = define "search" ~help Command @@ fun state ->
 
   let search_from_cursor subtext (cursor: File.cursor) =
     match
-      Text.search_forwards Character.case_insensitive_equals
+      Text.search_forwards (if case_sensitive then Character.equals else Character.case_insensitive_equals)
         ~x1: cursor.search_start.x ~y1: cursor.search_start.y
         ~subtext view.file.text
     with
@@ -1534,7 +1534,7 @@ let () = define "search" ~help Command @@ fun state ->
 
   (* Create search file and view. *)
   let search_file = File.create "search" default in
-  let search_view = File.create_view Search search_file in
+  let search_view = File.create_view (Search { case_sensitive }) search_file in
   (
     File.foreach_cursor search_view @@ fun cursor ->
     move_cursor true false search_view cursor move_end_of_line
