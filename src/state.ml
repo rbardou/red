@@ -166,10 +166,13 @@ let remove_panel panel state =
 let set_focus state focus =
   state.focus <- focus
 
+let create_empty_file (state: t) =
+  create_file state "(new file)" Text.empty
+
 let get_default_view (state: t) =
   match state.files with
     | [] ->
-        let file = create_file state "(new file)" Text.empty in
+        let file = create_empty_file state in
         File.create_view File file
     | file :: _ ->
         match file.views with

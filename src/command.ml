@@ -643,7 +643,8 @@ let help { H.line; par; see_also } =
   see_also [ "open"; "switch_file" ]
 
 let () = define "new" ~help Command @@ fun state ->
-  let view = State.get_default_view state in
+  let file = State.create_empty_file state in
+  let view = File.create_view File file in
   State.set_focused_view state view
 
 let help { H.line; see_also } =
