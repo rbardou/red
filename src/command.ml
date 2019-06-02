@@ -1586,7 +1586,7 @@ let () = define "search" ~help ("backwards" -: Bool @-> "case_sensitive" -: Bool
 let () = define "search" ~help Command (search false false)
 
 let help { H.line } =
-  line "Choose from the history of the previous validated texts."
+  line "Open prompt history."
 
 let () = define "choose_from_history" ~help Command @@ fun state ->
   let main_view = State.get_focused_main_view state in
@@ -1601,3 +1601,22 @@ let () = define "choose_from_history" ~help Command @@ fun state ->
               choose_from_list ~choice: 0 prompt_text (State.get_history history_context state) state @@ fun choice ->
               main_view.prompt <- None;
               validate_prompt choice
+
+let help { H.line } =
+  line "Copy selected choice into prompt so you can edit it."
+
+let () = define "edit_selected_choice" ~help Command @@ fun state ->
+  let view = State.get_focused_main_view state in
+  match view.kind with
+    | List_choice { choice; choices } ->
+        let filter = Text.to_string view.file.text in
+        (
+          match List.nth (filter_choices filter choices) choice with
+            | exception (Invalid_argument _ | Failure _) ->
+                abort "no selected choice"
+            | choice ->
+                select_all view;
+                File.replace_selection_with_text view (Text.of_utf8_string choice)
+        )
+    | _ ->
+        abort "not selecting from a list"

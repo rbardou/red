@@ -1187,6 +1187,21 @@ let cut (global_clipboard: Clipboard.t) view =
   clipboard.text <- get_selected_text view.file.text cursor;
   delete_selection view cursor
 
+let replace_selection_with_text view sub =
+  edit true view.file @@ fun () ->
+  foreach_cursor view @@ fun cursor ->
+
+  (* Replace selection with text. *)
+  delete_selection view cursor;
+  let x = cursor.position.x in
+  let y = cursor.position.y in
+  set_text view.file (Text.insert_text ~x ~y ~sub view.file.text);
+
+  (* Update marks. *)
+  let lines = Text.get_line_count sub - 1 in
+  let characters = Text.get_line_length lines sub in
+  update_views_after_insert ~x ~y ~characters ~lines view.file.views
+
 let paste (global_clipboard: Clipboard.t) view =
   edit true view.file @@ fun () ->
   foreach_cursor_clipboard global_clipboard view @@ fun clipboard cursor ->

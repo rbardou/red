@@ -165,6 +165,7 @@ let main () =
   Down => "choose_previous";
   Return => "validate";
   Alt_letter_x => "execute_command";
+  Ctrl_e => "edit_selected_choice";
 
   (* Help Bindings *)
   let (=>) = Command.bind Help state in
