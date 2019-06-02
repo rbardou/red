@@ -109,6 +109,15 @@ type 'state stylist =
 
 type packed_stylist = Stylist: 'a stylist -> packed_stylist
 
+module History_context =
+struct
+  type t =
+    | Command
+    | External_command
+
+  let compare = Pervasives.compare
+end
+
 type t =
   {
     mutable views: view list;
@@ -130,6 +139,7 @@ type t =
     mutable live_process_ids: int list;
     mutable open_file_descriptors: Unix.file_descr list;
     mutable on_edit: unit -> unit;
+    history_context: History_context.t option;
   }
 
 and view =
@@ -776,7 +786,7 @@ let create_view kind file =
   view
 
 (* You may want to use [State.create_file] instead. *)
-let create ?(read_only = false) name text =
+let create ?(read_only = false) ?history name text =
   {
     views = [];
     text;
@@ -792,6 +802,7 @@ let create ?(read_only = false) name text =
     live_process_ids = [];
     open_file_descriptors = [];
     on_edit = (fun () -> ());
+    history_context = history;
   }
 
 (* Note: this does not kill stylists. *)

@@ -11,19 +11,37 @@ struct
     | Help
 
   let compare = Pervasives.compare
-
-  let list =
-    [
-      Global;
-      File;
-      Prompt;
-      Search;
-      List_choice;
-      Help;
-    ]
 end
 
 module Context_map = Map.Make (Context)
+
+module History_context_map = Map.Make (File.History_context)
+
+module History =
+struct
+  type t = string Sequence.t
+
+  let empty = Sequence.empty
+
+  let max_count = 1000
+
+  let add item (history: t) =
+    if
+      match Sequence.get 0 history with
+        | None ->
+            true
+        | Some previous_item ->
+            item <> previous_item
+    then
+      history
+      |> Sequence.insert 0 item
+      |> Sequence.truncate max_count
+    else
+      history
+
+  let to_list (history: t) =
+    Sequence.to_list history
+end
 
 type t =
   {
@@ -46,6 +64,8 @@ type t =
        But the command is not actually run until the state argument is given. *)
     run_file: string -> t -> unit;
     run_string: string -> t -> unit;
+
+    mutable history: History.t History_context_map.t;
   }
 
 let create ?focus ~run_file ~run_string layout =
@@ -64,6 +84,7 @@ let create ?focus ~run_file ~run_string layout =
     files = [];
     run_file;
     run_string;
+    history = History_context_map.empty;
   }
 
 exception Exit
@@ -184,3 +205,24 @@ let get_default_view (state: t) =
 let close_file file state =
   state.files <- List.filter ((!=) file) state.files;
   Layout.foreach_panel state.layout (Panel.remove_file file (fun () -> get_default_view state))
+
+let add_history context item state =
+  let previous_history =
+    match History_context_map.find context state.history with
+      | exception Not_found ->
+          History.empty
+      | history ->
+          history
+  in
+  let new_history = History.add item previous_history in
+  state.history <- History_context_map.add context new_history state.history
+
+let get_history context state =
+  let history =
+    match History_context_map.find context state.history with
+      | exception Not_found ->
+          History.empty
+      | history ->
+          history
+  in
+  History.to_list history

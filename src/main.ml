@@ -149,6 +149,7 @@ let main () =
   (* Prompt Bindings *)
   let (=>) = Command.bind Prompt state in
 
+  Up => "choose_from_history";
   Return => "validate";
 
   (* Search Bindings *)

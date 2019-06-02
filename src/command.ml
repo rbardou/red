@@ -317,9 +317,9 @@ let save (file: File.t) filename =
     file.redo_stack <- [];
   )
 
-let prompt ?(default = "") (prompt_text: string) (state: State.t) (validate_prompt: string -> unit) =
+let prompt ?history ?(default = "") (prompt_text: string) (state: State.t) (validate_prompt: string -> unit) =
   let view = State.get_focused_main_view state in
-  let prompt_view = File.create_view Prompt (File.create prompt_text (Text.of_utf8_string default)) in
+  let prompt_view = File.create_view Prompt (File.create ?history prompt_text (Text.of_utf8_string default)) in
   select_all prompt_view;
   view.prompt <-
     Some {
@@ -1341,7 +1341,8 @@ let help { H.add; line; nl; par; add_link; see_also } =
   see_also [ "execute_process" ]
 
 let () = define "execute_command" ~help Command @@ fun state ->
-  prompt "Execute command: " state @@ fun command ->
+  prompt "Execute command: " ~history: Command state @@ fun command ->
+  State.add_history Command command state;
   state.run_string command state
 
 let help { H.add; line; nl; par; add_link; see_also } =
@@ -1355,7 +1356,8 @@ let help { H.add; line; nl; par; add_link; see_also } =
 
 let () = define "execute_process" ~help Command @@ fun state ->
   let panel = state.focus in
-  prompt "Execute process: " state @@ fun command ->
+  prompt "Execute process: " ~history: External_command state @@ fun command ->
+  State.add_history External_command command state;
   match Shell_lexer.items [] [] (Lexing.from_string command) with
     | exception Failure reason ->
         abort "parse error in command: %s" reason
@@ -1582,3 +1584,20 @@ let help { H.line; par; add; nl; add_parameter; add_link } =
 
 let () = define "search" ~help ("backwards" -: Bool @-> "case_sensitive" -: Bool @-> Command) search
 let () = define "search" ~help Command (search false false)
+
+let help { H.line } =
+  line "Choose from the history of the previous validated texts."
+
+let () = define "choose_from_history" ~help Command @@ fun state ->
+  let main_view = State.get_focused_main_view state in
+  match main_view.prompt with
+    | None ->
+        abort "no history here (not a prompt)"
+    | Some { prompt_text; validate_prompt; prompt_view } ->
+        match prompt_view.file.history_context with
+          | None ->
+              abort "no history here"
+          | Some history_context ->
+              choose_from_list ~choice: 0 prompt_text (State.get_history history_context state) state @@ fun choice ->
+              main_view.prompt <- None;
+              validate_prompt choice

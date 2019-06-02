@@ -64,6 +64,9 @@ val of_array: ?ofs: int -> ?len: int -> 'a array -> 'a t
 (** Same as [of_array] but for lists. *)
 val of_list: ?ofs: int -> ?len: int -> 'a list -> 'a t
 
+(** Convert a sequence into a list. *)
+val to_list: 'a t -> 'a list
+
 (** Iterate over values in index order. *)
 val iter: ('a -> unit) -> 'a t -> unit
 
@@ -119,3 +122,8 @@ val insert_sub: int -> 'a t -> 'a t -> 'a t
 
 (** Test whether two sequences are equal, given a way to compare characters. *)
 val equals: ('a -> 'a -> bool) -> 'a t -> 'a t -> bool
+
+(** Removing items at the end if a sequence contains too many.
+
+    Usage: [truncate max_count] *)
+val truncate: int -> 'a t -> 'a t

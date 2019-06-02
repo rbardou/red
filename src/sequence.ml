@@ -505,6 +505,11 @@ let rec iter f sequence =
         f value;
         iter f right
 
+let to_list sequence =
+  let items = ref [] in
+  iter (fun item -> items := item :: !items) sequence;
+  List.rev !items
+
 let rec map f sequence =
   match sequence with
     | Leaf ->
@@ -666,3 +671,10 @@ let equals equal_characters a b =
           false
     in
     loop 0
+
+let rec truncate max_count sequence =
+  let count = count sequence in
+  if count > max_count then
+    truncate max_count (remove (count - 1) sequence)
+  else
+    sequence
