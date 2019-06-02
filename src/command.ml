@@ -1477,24 +1477,33 @@ let () = define "split_panel_horizontally" ~help ("position" -: Float @-> Comman
   else
     abort "invalid position to split panel: %F" position
 
-let help { H.line } =
-  line "Search for fixed text."
-
-let () = define "search" ~help ("case_sensitive" -: Bool @-> Command) @@ fun case_sensitive state ->
+let search backwards case_sensitive (state: State.t) =
   let view = State.get_focused_main_view state in
 
   (* Set starting position. *)
   (
     File.foreach_cursor view @@ fun cursor ->
-    cursor.search_start.x <- cursor.position.x;
-    cursor.search_start.y <- cursor.position.y
+    let position =
+      let left, right = File.selection_boundaries cursor in
+      if backwards then left else right
+    in
+    cursor.search_start.x <- position.x;
+    cursor.search_start.y <- position.y
   );
 
   let search_from_cursor subtext (cursor: File.cursor) =
     match
-      Text.search_forwards (if case_sensitive then Character.equals else Character.case_insensitive_equals)
-        ~x1: cursor.search_start.x ~y1: cursor.search_start.y
-        ~subtext view.file.text
+      let equal_characters = if case_sensitive then Character.equals else Character.case_insensitive_equals in
+      if backwards then
+        Text.search_backwards
+          equal_characters
+          ~x2: (cursor.search_start.x - 1) ~y2: cursor.search_start.y
+          ~subtext view.file.text
+      else
+        Text.search_forwards
+          equal_characters
+          ~x1: cursor.search_start.x ~y1: cursor.search_start.y
+          ~subtext view.file.text
     with
       | None ->
           abort "text not found"
@@ -1534,7 +1543,7 @@ let () = define "search" ~help ("case_sensitive" -: Bool @-> Command) @@ fun cas
 
   (* Create search file and view. *)
   let search_file = File.create "search" default in
-  let search_view = File.create_view (Search { case_sensitive }) search_file in
+  let search_view = File.create_view (Search { backwards; case_sensitive }) search_file in
   (
     File.foreach_cursor search_view @@ fun cursor ->
     move_cursor true false search_view cursor move_end_of_line
@@ -1549,3 +1558,26 @@ let () = define "search" ~help ("case_sensitive" -: Bool @-> Command) @@ fun cas
 
   (* When the search file is edited, search again, but using search_file.text instead of cursor selections. *)
   search_file.on_edit <- (fun () -> search_from_all_cursors ~subtext: search_file.text ())
+
+let help { H.line; par; add; nl; add_parameter; add_link } =
+  line "Search for fixed text.";
+  par ();
+  line "Search for the next occurrence of the selected text.";
+  line "Edit text to search for in the search prompt.";
+  add "Exit search prompt using "; add_link "validate"; add " or "; add_link "cancel"; add "."; nl ();
+  par ();
+  line "When an occurrence is found, it is selected.";
+  line "Runnning this command again will thus search for the next occurrence.";
+  par ();
+  line "In multiple cursor mode, each cursor searches for his own selection.";
+  line "Editing the text to search in the search prompt will cause all cursors";
+  line "to search for this text instead.";
+  par ();
+  add "If "; add_parameter "case_sensitive"; add " is true, search for an exact match."; nl ();
+  line "Else, ignore case. Default is false.";
+  par ();
+  add "If "; add_parameter "backwards"; add " is true, search for the first occurrence before the cursor."; nl ();
+  line "Else, search for the first occurrence after the cursor. Default is false."
+
+let () = define "search" ~help ("backwards" -: Bool @-> "case_sensitive" -: Bool @-> Command) search
+let () = define "search" ~help Command (search false false)

@@ -299,8 +299,7 @@ let equals equal_characters a b =
     in
     loop 0
 
-(* TODO: Boyer-Moore algorithm or something like that. *)
-let search_forwards equal_characters ?(x1 = 0) ?(y1 = 0) ?x2 ?y2 ~subtext text =
+let prepare_search ?x2 ?y2 ~subtext text =
   let y2 =
     match y2 with
       | None ->
@@ -317,19 +316,27 @@ let search_forwards equal_characters ?(x1 = 0) ?(y1 = 0) ?x2 ?y2 ~subtext text =
   in
   let lines = get_line_count subtext - 1 in
   let characters = get_line_length lines subtext in
+  x2, y2, lines, characters
+
+let search_found ~x ~y ~lines ~characters =
+  let end_x, end_y =
+    if lines = 0 then
+      x + characters - 1, y
+    else
+      characters - 1, y + lines
+  in
+  Some (x, y, end_x, end_y)
+
+(* TODO: Boyer-Moore algorithm or something like that. *)
+let search_forwards equal_characters ?(x1 = 0) ?(y1 = 0) ?x2 ?y2 ~subtext text =
+  let x2, y2, lines, characters = prepare_search ?x2 ?y2 ~subtext text in
   let rec search x y =
     if y2 < y || y2 = y && x2 < x then
       None
     else
       let candidate = sub_region ~x ~y ~characters ~lines text in
       if equals equal_characters subtext candidate then
-        let end_x, end_y =
-          if lines = 0 then
-            x + characters - 1, y
-          else
-            characters - 1, y + lines
-        in
-        Some (x, y, end_x, end_y)
+        search_found ~x ~y ~lines ~characters
       else
         let x, y =
           if x > get_line_length y text then
@@ -340,3 +347,24 @@ let search_forwards equal_characters ?(x1 = 0) ?(y1 = 0) ?x2 ?y2 ~subtext text =
         search x y
   in
   search x1 y1
+
+(* TODO: Boyer-Moore algorithm or something like that. *)
+let search_backwards equal_characters ?(x1 = 0) ?(y1 = 0) ?x2 ?y2 ~subtext text =
+  let x2, y2, lines, characters = prepare_search ?x2 ?y2 ~subtext text in
+  let rec search x y =
+    if y < y1 || y = y1 && x < x1 then
+      None
+    else
+      let candidate = sub_region ~x ~y ~characters ~lines text in
+      if equals equal_characters subtext candidate then
+        search_found ~x ~y ~lines ~characters
+      else
+        let x, y =
+          if x <= 0 then
+            get_line_length (y - 1) text, y - 1
+          else
+            x - 1, y
+        in
+        search x y
+  in
+  search x2 y2

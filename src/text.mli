@@ -111,3 +111,9 @@ val search_forwards:
   ('a -> 'a -> bool) ->
   ?x1: int -> ?y1: int -> ?x2: int -> ?y2: int ->
   subtext: 'a t -> 'a t -> (int * int * int * int) option
+
+(** Same as [search_forwards], but start from the end [(x2, y2)]. *)
+val search_backwards:
+  ('a -> 'a -> bool) ->
+  ?x1: int -> ?y1: int -> ?x2: int -> ?y2: int ->
+  subtext: 'a t -> 'a t -> (int * int * int * int) option

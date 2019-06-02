@@ -257,13 +257,19 @@ let render focused_panel (frame: Render.frame) panel ~x ~y ~w ~h =
       | None ->
           has_focus, h
       | Some { search_view } ->
-          let case_sensitive =
+          let backwards, case_sensitive =
             match search_view.kind with
-              | Search { case_sensitive } -> case_sensitive
-              | _ -> false (* weird *)
+              | Search { backwards; case_sensitive } -> backwards, case_sensitive
+              | _ -> false, false (* weird *)
           in
           render_prompt has_focus frame search_view
-            (if case_sensitive then "Search for (case-sensitive): " else "Search for: ")
+            (
+              match backwards, case_sensitive with
+                | false, false -> "Search for: "
+                | true, false -> "Search backwards for: ";
+                | false, true -> "(Case-Sensitive) Search for: ";
+                | true, true -> "(Case-Sensitive) Search backwards for: ";
+            )
             ~x ~y: (y + h - 1) ~w;
           false, h - 1
   in

@@ -171,9 +171,9 @@ let command_page (command: command) state =
       add ": ";
       add (Redl.Typing.show_type false typ);
       add ")";
-      nl ();
     in
-    List.iter add_parameter parameters
+    List.iter add_parameter parameters;
+    nl ();
   in
   List.iter add_variant command.variants;
 

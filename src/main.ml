@@ -128,8 +128,8 @@ let main () =
   Ctrl_z => "undo";
   Ctrl_y => "redo";
   Ctrl_g => "cancel";
-  Ctrl_f => "search false";
-  Alt_letter_F => "search true";
+  Ctrl_f => "search";
+  Alt_letter_f => "search true false";
 
   F2 => "new";
   F3 => "switch_file";
