@@ -14,3 +14,9 @@ val is_word_character: t -> bool
 
 (** Negation of [is_word_character]. *)
 val is_not_word_character: t -> bool
+
+(** Test whether two characters are equal. *)
+val equals: t -> t -> bool
+
+(** Test whether two characters are equal (case-insensitive). *)
+val case_insensitive_equals: t -> t -> bool

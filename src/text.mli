@@ -100,3 +100,14 @@ val map_sub: x1: int -> y1: int -> x2: int -> y2: int -> ('a -> 'a) -> 'a t -> '
 
     The first line of the second text is appended to the last line of the first one. *)
 val concat: 'a t -> 'a t -> 'a t
+
+(** Test whether two texts are equal. *)
+val equals: ('a -> 'a -> bool) -> 'a t -> 'a t -> bool
+
+(** Search for a subtext inside a text.
+
+    Return [Some (start_x, start_y, end_x, end_y)] if found. *)
+val search_forwards:
+  ('a -> 'a -> bool) ->
+  ?x1: int -> ?y1: int -> ?x2: int -> ?y2: int ->
+  subtext: 'a t -> 'a t -> (int * int * int * int) option

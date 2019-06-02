@@ -12,3 +12,7 @@ let is_word_character character =
 
 let is_not_word_character character =
   not (is_word_character character)
+
+let equals = String.equal
+
+let case_insensitive_equals a b = String.equal (String.lowercase_ascii a) (String.lowercase_ascii b)

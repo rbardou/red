@@ -280,3 +280,63 @@ let concat a b =
   let b_first_line = get_line 0 b in
   let a = Sequence.set (a_line_count - 1) (Line.concat a_last_line b_first_line) a in
   Sequence.concat a (Sequence.remove 0 b)
+
+let equals equal_characters a b =
+  let line_count = get_line_count a in
+  if get_line_count b <> line_count then
+    false
+  else
+    let rec loop from =
+      if from >= line_count then
+        true
+      else
+        let la = get_line from a in
+        let lb = get_line from b in
+        if Line.equals equal_characters la lb then
+          loop (from + 1)
+        else
+          false
+    in
+    loop 0
+
+(* TODO: Boyer-Moore algorithm or something like that. *)
+let search_forwards equal_characters ?(x1 = 0) ?(y1 = 0) ?x2 ?y2 ~subtext text =
+  let y2 =
+    match y2 with
+      | None ->
+          get_line_count text - 1
+      | Some y2 ->
+          y2
+  in
+  let x2 =
+    match x2 with
+      | None ->
+          get_line_length y2 text
+      | Some x2 ->
+          x2
+  in
+  let lines = get_line_count subtext - 1 in
+  let characters = get_line_length lines subtext in
+  let rec search x y =
+    if y2 < y || y2 = y && x2 < x then
+      None
+    else
+      let candidate = sub_region ~x ~y ~characters ~lines text in
+      if equals equal_characters subtext candidate then
+        let end_x, end_y =
+          if lines = 0 then
+            x + characters - 1, y
+          else
+            characters - 1, y + lines
+        in
+        Some (x, y, end_x, end_y)
+      else
+        let x, y =
+          if x > get_line_length y text then
+            0, y + 1
+          else
+            x + 1, y
+        in
+        search x y
+  in
+  search x1 y1

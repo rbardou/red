@@ -149,6 +149,7 @@ let bindings_page state =
       | Global -> assert false (* not a local context *)
       | File -> "The following bindings are available because you are editing a file:"
       | Prompt -> "The following bindings are available because you are in a prompt:"
+      | Search -> "The following bindings are available because you are searching:"
       | List_choice -> "The following bindings are available because you are choosing from a list:"
       | Help -> "The following bindings are available because you are in the help panel:"
   );
@@ -201,6 +202,7 @@ let command_page (command: command) state =
         match context with
           | Global -> line "Globally:"
           | File -> line "In a file:"
+          | Search -> line "When searching:"
           | Prompt -> line "In a prompt:"
           | List_choice -> line "When choosing from a list:"
           | Help -> line "In the help panel:"

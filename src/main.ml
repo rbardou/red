@@ -128,6 +128,7 @@ let main () =
   Ctrl_z => "undo";
   Ctrl_y => "redo";
   Ctrl_g => "cancel";
+  Ctrl_f => "search";
 
   F2 => "new";
   F3 => "switch_file";
@@ -146,6 +147,11 @@ let main () =
 
   (* Prompt Bindings *)
   let (=>) = Command.bind Prompt state in
+
+  Return => "validate";
+
+  (* Search Bindings *)
+  let (=>) = Command.bind Search state in
 
   Return => "validate";
 

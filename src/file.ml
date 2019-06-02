@@ -10,6 +10,7 @@ type cursor =
     position: mark;
     mutable preferred_x: int;
     clipboard: Clipboard.t;
+    search_start: mark;
   }
 
 (* Test whether a mark is before another mark. *)
@@ -128,6 +129,7 @@ type t =
     mutable process_status: Unix.process_status option;
     mutable live_process_ids: int list;
     mutable open_file_descriptors: Unix.file_descr list;
+    mutable on_edit: unit -> unit;
   }
 
 and view =
@@ -143,6 +145,7 @@ and view =
     mutable style: Style.t Text.t;
     mutable stylist: packed_stylist option;
     mutable prompt: prompt option;
+    mutable search: search option;
   }
 
 and prompt =
@@ -150,6 +153,11 @@ and prompt =
     prompt_text: string;
     validate_prompt: string -> unit;
     prompt_view: view;
+  }
+
+and search =
+  {
+    search_view: view;
   }
 
 and undo =
@@ -202,6 +210,7 @@ and help =
 and view_kind =
   | File
   | Prompt
+  | Search
   | List_choice of choice
   | Help of help
 
@@ -738,6 +747,7 @@ let create_cursor x y =
     position = { x; y };
     preferred_x = x;
     clipboard = { text = Text.empty };
+    search_start = { x; y };
   }
 
 (* Created by [Command] because of circular dependency issues. *)
@@ -758,6 +768,7 @@ let create_view kind file =
       style = Text.map (fun _ -> Style.default) file.text;
       stylist = None;
       prompt = None;
+      search = None;
     }
   in
   file.views <- view :: file.views;
@@ -780,6 +791,7 @@ let create ?(read_only = false) name text =
     process_status = None;
     live_process_ids = [];
     open_file_descriptors = [];
+    on_edit = (fun () -> ());
   }
 
 (* Note: this does not kill stylists. *)
@@ -1079,12 +1091,15 @@ let edit save_undo file f =
       f ();
     reset_preferred_x file;
 
-    foreach_view file @@ fun view ->
-    match view.kind with
-      | List_choice choice ->
-          choice.choice <- -1
-      | _ ->
-          ()
+    (
+      foreach_view file @@ fun view ->
+      match view.kind with
+        | List_choice choice ->
+            choice.choice <- -1
+        | _ ->
+            ()
+    );
+    file.on_edit ()
   )
 
 let replace_selection_by_character character view =
@@ -1249,9 +1264,14 @@ let copy_view view =
       position = copy_mark cursor.position;
       preferred_x = cursor.preferred_x;
       clipboard = cursor.clipboard;
+      search_start = copy_mark cursor.search_start;
     }
   in
   copy.cursors <- List.map copy_cursor view.cursors;
   copy.marks <- !marks;
 
   copy
+
+let get_cursor_subtext cursor text =
+  let from, until = selection_boundaries cursor in
+  Text.sub ~x1: from.x ~y1: from.y ~x2: (until.x - 1) ~y2: until.y text

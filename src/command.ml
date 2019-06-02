@@ -488,7 +488,7 @@ let split_panel direction pos (state: State.t) =
   let view = State.get_focused_main_view state in
   let new_view =
     match view.kind with
-      | Prompt | List_choice _ | Help _ ->
+      | Prompt | Search | List_choice _ | Help _ ->
           State.get_default_view state
       | File ->
           File.copy_view view
@@ -501,7 +501,7 @@ let split_panel direction pos (state: State.t) =
     ) state.layout
   with
     | None ->
-        Log.error "failed to replace current panel: panel not found in current layout"
+        abort "failed to replace current panel: panel not found in current layout"
     | Some new_layout ->
         State.set_layout state new_layout
 
@@ -584,13 +584,18 @@ let () = define "cancel" ~help Command @@ fun state ->
           | Some _ ->
               view.prompt <- None
           | None ->
-              match view.kind with
-                | Prompt | Help _ | List_choice _ ->
-                    if not (Panel.kill_current_view state.focus) then
-                      let view = State.get_default_view state in
-                      State.set_focused_view state view
-                | File ->
-                    ()
+              match view.search with
+                | Some _ ->
+                    (* TODO: restore cursor positions *)
+                    view.search <- None
+                | None ->
+                    match view.kind with
+                      | Prompt | Search | Help _ | List_choice _ ->
+                          if not (Panel.kill_current_view state.focus) then
+                            let view = State.get_default_view state in
+                            State.set_focused_view state view
+                      | File ->
+                          ()
 
 let help { H.line; par; see_also } =
   line "Save file.";
@@ -1302,26 +1307,30 @@ let () = define "validate" ~help Command @@ fun state ->
         view.prompt <- None;
         validate_prompt (Text.to_string prompt_view.file.text)
     | None ->
-        match view.kind with
-          | List_choice { validate_choice; choice; choices } ->
-              let filter = Text.to_string view.file.text in
-              if not (Panel.kill_current_view panel) then
-                (* User killed the file from which we spawned the list choice?
-                   This should be a rare occurrence. *)
-                (* TODO: if validation results in opening a file, do not create a new empty file *)
-                (
-                  let view = State.get_default_view state in
-                  Panel.set_current_view panel view;
-                );
-              (
-                match List.nth (filter_choices filter choices) choice with
-                  | exception (Invalid_argument _ | Failure _) ->
-                      validate_choice filter
-                  | choice ->
-                      validate_choice choice
-              )
-          | _ ->
-              abort "focused panel is not a prompt"
+        match view.search with
+          | Some _ ->
+              view.search <- None
+          | None ->
+              match view.kind with
+                | List_choice { validate_choice; choice; choices } ->
+                    let filter = Text.to_string view.file.text in
+                    if not (Panel.kill_current_view panel) then
+                      (* User killed the file from which we spawned the list choice?
+                         This should be a rare occurrence. *)
+                      (* TODO: if validation results in opening a file, do not create a new empty file *)
+                      (
+                        let view = State.get_default_view state in
+                        Panel.set_current_view panel view;
+                      );
+                    (
+                      match List.nth (filter_choices filter choices) choice with
+                        | exception (Invalid_argument _ | Failure _) ->
+                            validate_choice filter
+                        | choice ->
+                            validate_choice choice
+                    )
+                | _ ->
+                    abort "focused panel is not a prompt"
 
 let help { H.add; line; nl; par; add_link; see_also } =
   line "Execute a command.";
@@ -1436,7 +1445,7 @@ let () = define "split_panel_vertically" ~help ("position" -: Float @-> Command)
     let position = Layout.Ratio (int_of_float (position *. 100_000.), 100_000) in
     split_panel Vertical position state
   else
-    Log.error "invalid position to split panel: %F" position
+    abort "invalid position to split panel: %F" position
 
 let help { H.line; add; nl; add_parameter; par; see_also } =
   line "Split current panel horizontally (top and bottom).";
@@ -1466,4 +1475,67 @@ let () = define "split_panel_horizontally" ~help ("position" -: Float @-> Comman
     let position = Layout.Ratio (int_of_float (position *. 100_000.), 100_000) in
     split_panel Horizontal position state
   else
-    Log.error "invalid position to split panel: %F" position
+    abort "invalid position to split panel: %F" position
+
+let help { H.line } =
+  line "Search for fixed text."
+
+let () = define "search" ~help Command @@ fun state ->
+  (* Get default. *)
+  let view = State.get_focused_main_view state in
+  let default =
+    match view.cursors with
+      | [] ->
+          Text.empty
+      | [ cursor ] ->
+          File.get_cursor_subtext cursor view.file.text
+      | _ :: _ :: _ ->
+          Text.empty
+  in
+
+  (* Create search file and view. *)
+  let search_file = File.create "search" default in
+  let search_view = File.create_view Search search_file in
+  (
+    File.foreach_cursor search_view @@ fun cursor ->
+    move_cursor true false search_view cursor move_end_of_line
+  );
+  view.search <-
+    Some {
+      search_view;
+    };
+
+  (* Set starting position. *)
+  (
+    File.foreach_cursor view @@ fun cursor ->
+    cursor.search_start.x <- cursor.position.x;
+    cursor.search_start.y <- cursor.position.y
+  );
+
+  (* Function to call to search from a cursor. *)
+  let search_from_cursor (cursor: File.cursor) =
+    let subtext = search_file.text in
+    match
+      Text.search_forwards Character.case_insensitive_equals
+        ~x1: cursor.search_start.x ~y1: cursor.search_start.y
+        ~subtext view.file.text
+    with
+      | None ->
+          abort "text not found"
+      | Some (x1, y1, x2, y2) ->
+          cursor.selection_start.x <- x1;
+          cursor.selection_start.y <- y1;
+          cursor.position.x <- x2 + 1;
+          cursor.position.y <- y2;
+          cursor.preferred_x <- x2
+  in
+
+  (* When the search file is edited, search. *)
+  let on_edit () =
+    (
+      File.foreach_cursor view @@ fun cursor ->
+      search_from_cursor cursor
+    );
+    File.recenter_if_needed view
+  in
+  search_file.on_edit <- on_edit

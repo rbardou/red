@@ -14,10 +14,14 @@ let get_current_main_view panel =
 let get_current_view panel =
   let view = panel.view in
   match view.prompt with
-    | None ->
-        view
     | Some { prompt_view } ->
         prompt_view
+    | None ->
+        match view.search with
+          | None ->
+              view
+          | Some { search_view } ->
+              search_view
 
 let set_current_view panel (view: File.view) =
   (* If current view is a File view, add it to previous views. *)
@@ -25,7 +29,7 @@ let set_current_view panel (view: File.view) =
     match panel.view.kind with
       | File ->
           panel.previous_views <- panel.view :: panel.previous_views
-      | Prompt | List_choice _ | Help _ ->
+      | Prompt | Search | List_choice _ | Help _ ->
           ()
   );
 
@@ -248,9 +252,17 @@ let render focused_panel (frame: Render.frame) panel ~x ~y ~w ~h =
           render_prompt has_focus frame prompt_view prompt_text ~x ~y: (y + h - 1) ~w;
           h - 1
   in
+  let h =
+    match panel.view.search with
+      | None ->
+          h
+      | Some { search_view } ->
+          render_prompt has_focus frame search_view "Search for: " ~x ~y: (y + h - 1) ~w;
+          h - 1
+  in
   match panel.view.kind with
-    | Prompt ->
-        (* Do not render prompts directly, always render their parent view. *)
+    | Prompt | Search ->
+        (* Do not render these directly, always render their parent view. *)
         invalid_arg "Panel.render: Prompt"
 
     | File ->

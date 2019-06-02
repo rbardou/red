@@ -116,3 +116,6 @@ val sub: int -> int -> 'a t -> 'a t
     then concatenating [left], [sequence_to_insert] and [right],
     but more efficient if [sequence_to_insert] is small. *)
 val insert_sub: int -> 'a t -> 'a t -> 'a t
+
+(** Test whether two sequences are equal, given a way to compare characters. *)
+val equals: ('a -> 'a -> bool) -> 'a t -> 'a t -> bool

@@ -647,3 +647,22 @@ let insert_sub x sub sequence =
           result := insert x value !result
   done;
   !result
+
+let equals equal_characters a b =
+  let character_count = count a in
+  if count b <> character_count then
+    false
+  else
+    (* TODO: we could maybe avoid repeating the O(log n) access for each character *)
+    let rec loop from =
+      if from >= character_count then
+        true
+      else
+        let ca = match get from a with None -> assert false | Some x -> x in
+        let cb = match get from b with None -> assert false | Some x -> x in
+        if equal_characters ca cb then
+          loop (from + 1)
+        else
+          false
+    in
+    loop 0
