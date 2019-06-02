@@ -229,7 +229,7 @@ let render focused_panel (frame: Render.frame) panel ~x ~y ~w ~h =
   let has_focus = panel == focused_panel in
   let view = panel.view in
 
-  let render_view ~x ~y ~w ~h =
+  let render_view has_focus ~x ~y ~w ~h =
     let cursor_style =
       if has_focus then
         Common_style.focus
@@ -244,18 +244,18 @@ let render focused_panel (frame: Render.frame) panel ~x ~y ~w ~h =
   in
 
   (* Render prompt, if any. *)
-  let h =
+  let has_focus, h =
     match panel.view.prompt with
       | None ->
-          h
+          has_focus, h
       | Some { prompt_text; prompt_view } ->
           render_prompt has_focus frame prompt_view prompt_text ~x ~y: (y + h - 1) ~w;
-          h - 1
+          false, h - 1
   in
-  let h =
+  let has_focus, h =
     match panel.view.search with
       | None ->
-          h
+          has_focus, h
       | Some { search_view } ->
           let case_sensitive =
             match search_view.kind with
@@ -265,7 +265,7 @@ let render focused_panel (frame: Render.frame) panel ~x ~y ~w ~h =
           render_prompt has_focus frame search_view
             (if case_sensitive then "Search for (case-sensitive): " else "Search for: ")
             ~x ~y: (y + h - 1) ~w;
-          h - 1
+          false, h - 1
   in
   match panel.view.kind with
     | Prompt | Search _ ->
@@ -273,7 +273,7 @@ let render focused_panel (frame: Render.frame) panel ~x ~y ~w ~h =
         invalid_arg "Panel.render: Prompt"
 
     | File ->
-        render_view ~x ~y ~w ~h: (h - 1);
+        render_view has_focus ~x ~y ~w ~h: (h - 1);
         render_file_status_bar has_focus frame view ~x ~y: (y + h - 1) ~w
 
     | List_choice { choice_prompt_text; choices; choice } ->
@@ -283,6 +283,6 @@ let render focused_panel (frame: Render.frame) panel ~x ~y ~w ~h =
         render_prompt has_focus frame view choice_prompt_text ~x ~y: (y + h - 1) ~w
 
     | Help { topic } ->
-        render_view ~x ~y ~w ~h: (h - 1);
+        render_view has_focus ~x ~y ~w ~h: (h - 1);
         let style = make_status_bar_style has_focus in
         Render.text ~style frame x (y + h - 1) w ("Help (" ^ topic ^ ") -- Press Q to close.")
