@@ -1512,7 +1512,6 @@ let () = define "search" ~help Command @@ fun state ->
     cursor.search_start.y <- cursor.position.y
   );
 
-  (* Function to call to search from a cursor. *)
   let search_from_cursor (cursor: File.cursor) =
     let subtext = search_file.text in
     match
@@ -1530,12 +1529,16 @@ let () = define "search" ~help Command @@ fun state ->
           cursor.preferred_x <- x2
   in
 
-  (* When the search file is edited, search. *)
-  let on_edit () =
+  let search_from_all_cursors () =
     (
       File.foreach_cursor view @@ fun cursor ->
       search_from_cursor cursor
     );
     File.recenter_if_needed view
   in
-  search_file.on_edit <- on_edit
+
+  (* Search once at the start. *)
+  search_from_all_cursors ();
+
+  (* When the search file is edited, search. *)
+  search_file.on_edit <- search_from_all_cursors
