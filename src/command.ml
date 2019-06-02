@@ -576,19 +576,19 @@ let help { H.line; par } =
 
 let () = define "cancel" ~help Command @@ fun state ->
   let view = State.get_focused_main_view state in
-  match view.cursors with
-    | first :: _ :: _ ->
-        view.cursors <- [ first ]
-    | _ ->
-        match view.prompt with
+  match view.prompt with
+    | Some _ ->
+        view.prompt <- None
+    | None ->
+        match view.search with
           | Some _ ->
-              view.prompt <- None
+              (* TODO: restore cursor positions *)
+              view.search <- None
           | None ->
-              match view.search with
-                | Some _ ->
-                    (* TODO: restore cursor positions *)
-                    view.search <- None
-                | None ->
+              match view.cursors with
+                | first :: _ :: _ ->
+                    view.cursors <- [ first ]
+                | _ ->
                     match view.kind with
                       | Prompt | Search | Help _ | List_choice _ ->
                           if not (Panel.kill_current_view state.focus) then
@@ -1481,8 +1481,47 @@ let help { H.line } =
   line "Search for fixed text."
 
 let () = define "search" ~help Command @@ fun state ->
-  (* Get default. *)
   let view = State.get_focused_main_view state in
+
+  (* Set starting position. *)
+  (
+    File.foreach_cursor view @@ fun cursor ->
+    cursor.search_start.x <- cursor.position.x;
+    cursor.search_start.y <- cursor.position.y
+  );
+
+  let search_from_cursor subtext (cursor: File.cursor) =
+    match
+      Text.search_forwards Character.case_insensitive_equals
+        ~x1: cursor.search_start.x ~y1: cursor.search_start.y
+        ~subtext view.file.text
+    with
+      | None ->
+          abort "text not found"
+      | Some (x1, y1, x2, y2) ->
+          cursor.selection_start.x <- x1;
+          cursor.selection_start.y <- y1;
+          cursor.position.x <- x2 + 1;
+          cursor.position.y <- y2;
+          cursor.preferred_x <- x2
+  in
+
+  let search_from_all_cursors ?subtext () =
+    (
+      File.foreach_cursor view @@ fun cursor ->
+      let subtext =
+        match subtext with
+          | None ->
+              File.get_cursor_subtext cursor view.file.text
+          | Some subtext ->
+              subtext
+      in
+      search_from_cursor subtext cursor
+    );
+    File.recenter_if_needed view
+  in
+
+  (* Get default subtext to search. *)
   let default =
     match view.cursors with
       | [] ->
@@ -1505,40 +1544,8 @@ let () = define "search" ~help Command @@ fun state ->
       search_view;
     };
 
-  (* Set starting position. *)
-  (
-    File.foreach_cursor view @@ fun cursor ->
-    cursor.search_start.x <- cursor.position.x;
-    cursor.search_start.y <- cursor.position.y
-  );
-
-  let search_from_cursor (cursor: File.cursor) =
-    let subtext = search_file.text in
-    match
-      Text.search_forwards Character.case_insensitive_equals
-        ~x1: cursor.search_start.x ~y1: cursor.search_start.y
-        ~subtext view.file.text
-    with
-      | None ->
-          abort "text not found"
-      | Some (x1, y1, x2, y2) ->
-          cursor.selection_start.x <- x1;
-          cursor.selection_start.y <- y1;
-          cursor.position.x <- x2 + 1;
-          cursor.position.y <- y2;
-          cursor.preferred_x <- x2
-  in
-
-  let search_from_all_cursors () =
-    (
-      File.foreach_cursor view @@ fun cursor ->
-      search_from_cursor cursor
-    );
-    File.recenter_if_needed view
-  in
-
-  (* Search once at the start. *)
+  (* Search once at the start using the text selected by each cursor. *)
   search_from_all_cursors ();
 
-  (* When the search file is edited, search. *)
-  search_file.on_edit <- search_from_all_cursors
+  (* When the search file is edited, search again, but using search_file.text instead of cursor selections. *)
+  search_file.on_edit <- (fun () -> search_from_all_cursors ~subtext: search_file.text ())
