@@ -74,58 +74,6 @@ let bind (context: State.Context.t) (state: State.t) (key: Key.t) (command: stri
 let abort = State.abort
 let abort_with_error = State.abort_with_error
 
-let rec find_character_forwards text x y f =
-  if y >= Text.get_line_count text then
-    None
-  else
-    match Text.get x y text with
-      | None ->
-          if f "\n" then
-            Some (x, y)
-          else
-            find_character_forwards text 0 (y + 1) f
-      | Some character ->
-          if f character then
-            Some (x, y)
-          else
-            find_character_forwards text (x + 1) y f
-
-let rec find_character_backwards text x y f =
-  if y < 0 then
-    None
-  else if x < 0 then
-    find_character_backwards text (Text.get_line_length (y - 1) text) (y - 1) f
-  else
-    match Text.get x y text with
-      | None ->
-          if f "\n" then
-            Some (x, y)
-          else
-            find_character_backwards text (x - 1) y f
-      | Some character ->
-          if f character then
-            Some (x, y)
-          else
-            find_character_backwards text (x - 1) y f
-
-let rec find_line_forwards text y f =
-  if y >= Text.get_line_count text then
-    None
-  else
-    if f (Text.get_line y text) then
-      Some y
-    else
-      find_line_forwards text (y + 1) f
-
-let rec find_line_backwards text y f =
-  if y < 0 then
-    None
-  else
-    if f (Text.get_line y text) then
-      Some y
-    else
-      find_line_backwards text (y - 1) f
-
 (* Change cursor position (apply [f] to get new coordinates).
    Update [preferred_x] unless [vertical].
    Reset selection if [reset_selection]. *)
@@ -151,108 +99,6 @@ let move reset_selection vertical f (state: State.t) =
     move_cursor reset_selection vertical view cursor f
   );
   File.recenter_if_needed view
-
-let move_right text x y =
-  if x >= Text.get_line_length y text then
-    if y >= Text.get_line_count text - 1 then
-      x, y
-    else
-      0, y + 1
-  else
-    x + 1, y
-
-let move_left text x y =
-  if x <= 0 then
-    if y <= 0 then
-      0, 0
-    else
-      Text.get_line_length (y - 1) text, y - 1
-  else
-    x - 1, y
-
-let move_down text x y =
-  if y >= Text.get_line_count text - 1 then
-    min x (Text.get_line_length y text), y
-  else
-    min x (Text.get_line_length (y + 1) text), y + 1
-
-let move_up text x y =
-  if y <= 0 then
-    min x (Text.get_line_length y text), y
-  else
-    min x (Text.get_line_length (y - 1) text), y - 1
-
-let move_end_of_line text _ y =
-  Text.get_line_length y text, y
-
-let move_beginning_of_line text _ y =
-  0, y
-
-let move_end_of_file text _ _ =
-  let y = Text.get_line_count text - 1 in
-  Text.get_line_length y text, y
-
-let move_beginning_of_file text _ _ =
-  0, 0
-
-let move_right_word ?(big = false) text x y =
-  match
-    find_character_forwards text x y
-      (if big then Character.is_big_word_character else Character.is_word_character)
-  with
-    | None ->
-        move_end_of_file text x y
-    | Some (x, y) ->
-        match
-          find_character_forwards text x y
-            (if big then Character.is_not_big_word_character else Character.is_not_word_character)
-        with
-          | None ->
-              move_end_of_file text x y
-          | Some (x, y) ->
-              x, y
-
-let move_left_word ?(big = false) text x y =
-  (* Move left once to avoid staying at the same place if we are already at the beginning of a word. *)
-  let x, y = move_left text x y in
-  match
-    find_character_backwards text x y
-      (if big then Character.is_big_word_character else Character.is_word_character)
-  with
-    | None ->
-        0, 0
-    | Some (x, y) ->
-        match
-          find_character_backwards text x y
-            (if big then Character.is_not_big_word_character else Character.is_not_word_character)
-        with
-          | None ->
-              0, 0
-          | Some (x, y) ->
-              (* We are at just before the word, go right once to be at the beginning of the word. *)
-              move_right text x y
-
-let move_down_paragraph text x y =
-  match find_line_forwards text y Line.is_not_empty with
-    | None ->
-        move_end_of_file text x y
-    | Some y ->
-        match find_line_forwards text y Line.is_empty with
-          | None ->
-              move_end_of_file text x y
-          | Some y ->
-              0, y
-
-let move_up_paragraph text x y =
-  match find_line_backwards text y Line.is_not_empty with
-    | None ->
-        0, 0
-    | Some y ->
-        match find_line_backwards text y Line.is_empty with
-          | None ->
-              0, 0
-          | Some y ->
-              0, y
 
 let focus_relative get (state: State.t) =
   match get state.focus state.layout with
@@ -721,7 +567,7 @@ let help { H.line; par; see_also } =
     "select_right"; "move_end_of_line"; "move_right_word";
   ]
 
-let () = define "move_right" ~help Command @@ move true false move_right
+let () = define "move_right" ~help Command @@ move true false File.move_right
 
 let help { H.line; par; see_also } =
   line "Move cursor to the left.";
@@ -737,7 +583,7 @@ let help { H.line; par; see_also } =
     "select_left"; "move_beginning_of_line"; "move_left_word";
   ]
 
-let () = define "move_left" ~help Command @@ move true false move_left
+let () = define "move_left" ~help Command @@ move true false File.move_left
 
 let help { H.line; par; see_also } =
   line "Move cursor to the next line.";
@@ -753,7 +599,7 @@ let help { H.line; par; see_also } =
     "select_down"; "move_end_of_file"; "move_down_paragraph";
   ]
 
-let () = define "move_down" ~help Command @@ move true true move_down
+let () = define "move_down" ~help Command @@ move true true File.move_down
 
 let help { H.line; par; see_also } =
   line "Move cursor to the previous line.";
@@ -769,7 +615,7 @@ let help { H.line; par; see_also } =
     "select_down"; "move_beginning_of_file"; "move_up_paragraph";
   ]
 
-let () = define "move_up" ~help Command @@ move true true move_up
+let () = define "move_up" ~help Command @@ move true true File.move_up
 
 let help { H.line; par; see_also } =
   line "Move cursor to the end of the current line.";
@@ -782,7 +628,7 @@ let help { H.line; par; see_also } =
     "move_beginning_of_line"; "move_end_of_file";
   ]
 
-let () = define "move_end_of_line" ~help Command @@ move true false move_end_of_line
+let () = define "move_end_of_line" ~help Command @@ move true false File.move_end_of_line
 
 let help { H.line; par; see_also } =
   line "Move cursor to the beginning of the current line.";
@@ -795,7 +641,7 @@ let help { H.line; par; see_also } =
     "move_end_of_line"; "move_beginning_of_file";
   ]
 
-let () = define "move_beginning_of_line" ~help Command @@ move true false move_beginning_of_line
+let () = define "move_beginning_of_line" ~help Command @@ move true false File.move_beginning_of_line
 
 let help { H.line; par; see_also } =
   line "Move cursor to the end of the current file.";
@@ -807,7 +653,7 @@ let help { H.line; par; see_also } =
     "select_end_of_file"; "move_end_of_line"; "move_beginning_of_file";
   ]
 
-let () = define "move_end_of_file" ~help Command @@ move true false move_end_of_file
+let () = define "move_end_of_file" ~help Command @@ move true false File.move_end_of_file
 
 let help { H.line; par; see_also } =
   line "Move cursor to the beginning of the current file.";
@@ -819,7 +665,7 @@ let help { H.line; par; see_also } =
     "select_beginning_of_file"; "move_beginning_of_line"; "move_end_of_file";
   ]
 
-let () = define "move_beginning_of_file" ~help Command @@ move true false move_beginning_of_file
+let () = define "move_beginning_of_file" ~help Command @@ move true false File.move_beginning_of_file
 
 let help { H.line; par; see_also } =
   line "Move cursor to the end of the word.";
@@ -832,7 +678,7 @@ let help { H.line; par; see_also } =
   line "Reset selection and preferred column.";
   see_also [ "select_right_word"; "move_left_word" ]
 
-let () = define "move_right_word" ~help Command @@ move true false move_right_word
+let () = define "move_right_word" ~help Command @@ move true false File.move_right_word
 
 let help { H.line; par; see_also } =
   line "Move cursor to the beginning of the word.";
@@ -845,7 +691,7 @@ let help { H.line; par; see_also } =
   line "Reset selection and preferred column.";
   see_also [ "select_left_word"; "move_right_word" ]
 
-let () = define "move_left_word" ~help Command @@ move true false move_left_word
+let () = define "move_left_word" ~help Command @@ move true false File.move_left_word
 
 let help { H.line; par; see_also } =
   line "Move cursor to the end of the paragraph.";
@@ -858,7 +704,7 @@ let help { H.line; par; see_also } =
   line "Reset selection.";
   see_also [ "select_down_paragraph"; "move_up_paragraph" ]
 
-let () = define "move_down_paragraph" ~help Command @@ move true false move_down_paragraph
+let () = define "move_down_paragraph" ~help Command @@ move true false File.move_down_paragraph
 
 let help { H.line; par; see_also } =
   line "Move cursor to the beginning of the paragraph.";
@@ -871,67 +717,67 @@ let help { H.line; par; see_also } =
   line "Reset selection.";
   see_also [ "select_up_paragraph"; "move_down_paragraph" ]
 
-let () = define "move_up_paragraph" ~help Command @@ move true false move_up_paragraph
+let () = define "move_up_paragraph" ~help Command @@ move true false File.move_up_paragraph
 
 let help { H.add; nl; add_link } =
   add "Same as "; add_link "move_right"; add " but does not reset selection."; nl ()
 
-let () = define "select_right" ~help Command @@ move false false move_right
+let () = define "select_right" ~help Command @@ move false false File.move_right
 
 let help { H.add; nl; add_link } =
   add "Same as "; add_link "move_left"; add " but does not reset selection."; nl ()
 
-let () = define "select_left" ~help Command @@ move false false move_left
+let () = define "select_left" ~help Command @@ move false false File.move_left
 
 let help { H.add; nl; add_link } =
   add "Same as "; add_link "move_down"; add " but does not reset selection."; nl ()
 
-let () = define "select_down" ~help Command @@ move false true move_down
+let () = define "select_down" ~help Command @@ move false true File.move_down
 
 let help { H.add; nl; add_link } =
   add "Same as "; add_link "move_up"; add " but does not reset selection."; nl ()
 
-let () = define "select_up" ~help Command @@ move false true move_up
+let () = define "select_up" ~help Command @@ move false true File.move_up
 
 let help { H.add; nl; add_link } =
   add "Same as "; add_link "move_end_of_line"; add " but does not reset selection."; nl ()
 
-let () = define "select_end_of_line" ~help Command @@ move false false move_end_of_line
+let () = define "select_end_of_line" ~help Command @@ move false false File.move_end_of_line
 
 let help { H.add; nl; add_link } =
   add "Same as "; add_link "move_beginning_of_line"; add " but does not reset selection."; nl ()
 
-let () = define "select_beginning_of_line" ~help Command @@ move false false move_beginning_of_line
+let () = define "select_beginning_of_line" ~help Command @@ move false false File.move_beginning_of_line
 
 let help { H.add; nl; add_link } =
   add "Same as "; add_link "move_end_of_file"; add " but does not reset selection."; nl ()
 
-let () = define "select_end_of_file" ~help Command @@ move false false move_end_of_file
+let () = define "select_end_of_file" ~help Command @@ move false false File.move_end_of_file
 
 let help { H.add; nl; add_link } =
   add "Same as "; add_link "move_beginning_of_file"; add " but does not reset selection."; nl ()
 
-let () = define "select_beginning_of_file" ~help Command @@ move false false move_beginning_of_file
+let () = define "select_beginning_of_file" ~help Command @@ move false false File.move_beginning_of_file
 
 let help { H.add; nl; add_link } =
   add "Same as "; add_link "move_right_word"; add " but does not reset selection."; nl ()
 
-let () = define "select_right_word" ~help Command @@ move false false move_right_word
+let () = define "select_right_word" ~help Command @@ move false false File.move_right_word
 
 let help { H.add; nl; add_link } =
   add "Same as "; add_link "move_left_word"; add " but does not reset selection."; nl ()
 
-let () = define "select_left_word" ~help Command @@ move false false move_left_word
+let () = define "select_left_word" ~help Command @@ move false false File.move_left_word
 
 let help { H.add; nl; add_link } =
   add "Same as "; add_link "move_down_paragraph"; add " but does not reset selection."; nl ()
 
-let () = define "select_down_paragraph" ~help Command @@ move false false move_down_paragraph
+let () = define "select_down_paragraph" ~help Command @@ move false false File.move_down_paragraph
 
 let help { H.add; nl; add_link } =
   add "Same as "; add_link "move_up_paragraph"; add " but does not reset selection."; nl ()
 
-let () = define "select_up_paragraph" ~help Command @@ move false false move_up_paragraph
+let () = define "select_up_paragraph" ~help Command @@ move false false File.move_up_paragraph
 
 let help { H.line; par; see_also } =
   line "Select all text.";
@@ -1207,7 +1053,7 @@ let () = define "delete_end_of_word" ~help Command @@ fun state ->
   let view = State.get_focused_view state in
   (
     File.delete_from_cursors view @@ fun text cursor ->
-    move_right_word text cursor.position.x cursor.position.y
+    File.move_right_word text cursor.position.x cursor.position.y
   );
   File.recenter_if_needed view
 
@@ -1225,7 +1071,7 @@ let () = define "delete_beginning_of_word" ~help Command @@ fun state ->
   let view = State.get_focused_view state in
   (
     File.delete_from_cursors view @@ fun text cursor ->
-    move_left_word text cursor.position.x cursor.position.y
+    File.move_left_word text cursor.position.x cursor.position.y
   );
   File.recenter_if_needed view
 
@@ -1607,7 +1453,7 @@ let search backwards case_sensitive (state: State.t) =
   let search_view = File.create_view (Search { backwards; case_sensitive }) search_file in
   (
     File.foreach_cursor search_view @@ fun cursor ->
-    move_cursor true false search_view cursor move_end_of_line
+    move_cursor true false search_view cursor File.move_end_of_line
   );
   view.search <-
     Some {
@@ -1691,44 +1537,20 @@ let help { H.line; par } =
 
 let () = define "choose_autocompletion" ~help Command @@ fun state ->
   let view = State.get_focused_view state in
-  match view.cursors with
-    | [] ->
+  match File.get_autocompletion view with
+    | No_cursor_to_autocomplete ->
         abort "No cursor to autocomplete."
-    | _ :: _ :: _ ->
+    | Too_many_cursors_to_autocomplete ->
         abort "Too many cursors to autocomplete."
-    | [ cursor ] ->
-        let file = view.file in
-        let text = file.text in
-        let cursor_x = cursor.position.x in
-        let cursor_y = cursor.position.y in
-
-        (* Check that there is something to autocomplete here. *)
-        let previous_character_is_big_word =
-          match Text.get (cursor_x - 1) cursor_y text with
-            | None ->
-                false
-            | Some character ->
-                Character.is_big_word_character character
+    | Nothing_to_autocomplete ->
+        abort_with_error "Nothing to autocomplete here."
+    | Word_is_on_multiple_lines ->
+        abort_with_error "Word is on multiple lines."
+    | May_autocomplete { y; start_x; end_x; prefix; suffixes } ->
+        let choices =
+          Trie.to_list suffixes
+          |> List.map (fun (word, _) -> File.Other, String.concat "" (prefix @ word))
         in
-        if not previous_character_is_big_word then abort_with_error "Nothing to autocomplete here.";
-
-        (* Look for the beginning of the word to autocomplete. *)
-        let start_x, start_y = move_left_word ~big: true text cursor_x cursor_y in
-        if cursor_y <> start_y then
-          abort_with_error "Word is on multiple lines."
-        else
-
-          (* Get the word to autocomplete. *)
-          let line = Text.get_line cursor_y text in
-          let prefix = Line.to_list ~ofs: start_x ~len: (cursor_x - start_x) line in
-          let suffixes = Trie.get prefix file.words in
-          let choices =
-            Trie.to_list suffixes
-            |> List.map (fun (word, _) -> File.Other, String.concat "" (prefix @ word))
-          in
-
-          (* Prompt. *)
-          choose_from_list ~choice: 0 ("Autocomplete " ^ String.concat "" prefix ^ " with: ") choices state
-          @@ fun choice ->
-          File.replace file ~x: start_x ~y: start_y ~lines: 0 ~characters: (cursor.position.x - start_x)
-            (Text.of_utf8_string choice)
+        choose_from_list ~choice: 0 ("Autocomplete " ^ String.concat "" prefix ^ " with: ") choices state
+        @@ fun choice ->
+        File.replace view.file ~x: start_x ~y ~lines: 0 ~characters: (end_x - start_x) (Text.of_utf8_string choice)

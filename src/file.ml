@@ -1417,3 +1417,220 @@ let copy_view view =
 let get_cursor_subtext cursor text =
   let from, until = selection_boundaries cursor in
   Text.sub ~x1: from.x ~y1: from.y ~x2: (until.x - 1) ~y2: until.y text
+
+let rec find_character_forwards text x y f =
+  if y >= Text.get_line_count text then
+    None
+  else
+    match Text.get x y text with
+      | None ->
+          if f "\n" then
+            Some (x, y)
+          else
+            find_character_forwards text 0 (y + 1) f
+      | Some character ->
+          if f character then
+            Some (x, y)
+          else
+            find_character_forwards text (x + 1) y f
+
+let rec find_character_backwards text x y f =
+  if y < 0 then
+    None
+  else if x < 0 then
+    find_character_backwards text (Text.get_line_length (y - 1) text) (y - 1) f
+  else
+    match Text.get x y text with
+      | None ->
+          if f "\n" then
+            Some (x, y)
+          else
+            find_character_backwards text (x - 1) y f
+      | Some character ->
+          if f character then
+            Some (x, y)
+          else
+            find_character_backwards text (x - 1) y f
+
+let rec find_line_forwards text y f =
+  if y >= Text.get_line_count text then
+    None
+  else
+    if f (Text.get_line y text) then
+      Some y
+    else
+      find_line_forwards text (y + 1) f
+
+let rec find_line_backwards text y f =
+  if y < 0 then
+    None
+  else
+    if f (Text.get_line y text) then
+      Some y
+    else
+      find_line_backwards text (y - 1) f
+
+let move_right text x y =
+  if x >= Text.get_line_length y text then
+    if y >= Text.get_line_count text - 1 then
+      x, y
+    else
+      0, y + 1
+  else
+    x + 1, y
+
+let move_left text x y =
+  if x <= 0 then
+    if y <= 0 then
+      0, 0
+    else
+      Text.get_line_length (y - 1) text, y - 1
+  else
+    x - 1, y
+
+let move_down text x y =
+  if y >= Text.get_line_count text - 1 then
+    min x (Text.get_line_length y text), y
+  else
+    min x (Text.get_line_length (y + 1) text), y + 1
+
+let move_up text x y =
+  if y <= 0 then
+    min x (Text.get_line_length y text), y
+  else
+    min x (Text.get_line_length (y - 1) text), y - 1
+
+let move_end_of_line text _ y =
+  Text.get_line_length y text, y
+
+let move_beginning_of_line text _ y =
+  0, y
+
+let move_end_of_file text _ _ =
+  let y = Text.get_line_count text - 1 in
+  Text.get_line_length y text, y
+
+let move_beginning_of_file text _ _ =
+  0, 0
+
+let move_right_word ?(big = false) text x y =
+  match
+    find_character_forwards text x y
+      (if big then Character.is_big_word_character else Character.is_word_character)
+  with
+    | None ->
+        move_end_of_file text x y
+    | Some (x, y) ->
+        match
+          find_character_forwards text x y
+            (if big then Character.is_not_big_word_character else Character.is_not_word_character)
+        with
+          | None ->
+              move_end_of_file text x y
+          | Some (x, y) ->
+              x, y
+
+let move_left_word ?(big = false) text x y =
+  (* Move left once to avoid staying at the same place if we are already at the beginning of a word. *)
+  let x, y = move_left text x y in
+  match
+    find_character_backwards text x y
+      (if big then Character.is_big_word_character else Character.is_word_character)
+  with
+    | None ->
+        0, 0
+    | Some (x, y) ->
+        match
+          find_character_backwards text x y
+            (if big then Character.is_not_big_word_character else Character.is_not_word_character)
+        with
+          | None ->
+              0, 0
+          | Some (x, y) ->
+              (* We are at just before the word, go right once to be at the beginning of the word. *)
+              move_right text x y
+
+let move_down_paragraph text x y =
+  match find_line_forwards text y Line.is_not_empty with
+    | None ->
+        move_end_of_file text x y
+    | Some y ->
+        match find_line_forwards text y Line.is_empty with
+          | None ->
+              move_end_of_file text x y
+          | Some y ->
+              0, y
+
+let move_up_paragraph text x y =
+  match find_line_backwards text y Line.is_not_empty with
+    | None ->
+        0, 0
+    | Some y ->
+        match find_line_backwards text y Line.is_empty with
+          | None ->
+              0, 0
+          | Some y ->
+              0, y
+
+type autocompletion =
+  {
+    (* Line where autocompletion can be done. *)
+    y: int;
+    (* Start of the prefix to autocomplete. *)
+    start_x: int;
+    (* End of the prefix to autocomplete. Not included. *)
+    end_x: int;
+    (* Prefix to autocomplete. *)
+    prefix: Trie.word;
+    (* Available suffixes for this prefix. *)
+    suffixes: Trie.t;
+  }
+
+type autocompletion_result =
+  | No_cursor_to_autocomplete
+  | Too_many_cursors_to_autocomplete
+  | Nothing_to_autocomplete
+  | Word_is_on_multiple_lines
+  | May_autocomplete of autocompletion
+
+let get_autocompletion view =
+  match view.cursors with
+    | [] ->
+        No_cursor_to_autocomplete
+    | _ :: _ :: _ ->
+        Too_many_cursors_to_autocomplete
+    | [ cursor ] ->
+        let file = view.file in
+        let text = file.text in
+        let end_x = cursor.position.x in
+        let end_y = cursor.position.y in
+
+        (* Check that there is something to autocomplete here. *)
+        let previous_character_is_big_word =
+          match Text.get (end_x - 1) end_y text with
+            | None ->
+                false
+            | Some character ->
+                Character.is_big_word_character character
+        in
+        if not previous_character_is_big_word then
+          Nothing_to_autocomplete
+        else
+
+          (* Look for the beginning of the word to autocomplete. *)
+          let start_x, start_y = move_left_word ~big: true text end_x end_y in
+          if end_y <> start_y then
+            Word_is_on_multiple_lines
+          else
+
+            (* Get the word to autocomplete. *)
+            let line = Text.get_line end_y text in
+            let prefix = Line.to_list ~ofs: start_x ~len: (end_x - start_x) line in
+            let suffixes = Trie.get prefix file.words in
+            May_autocomplete {
+              y = start_y;
+              start_x;
+              end_x;
+              prefix;
+              suffixes;
+            }
