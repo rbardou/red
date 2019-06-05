@@ -63,7 +63,7 @@ let main () =
   let (=>) = Command.bind Global state in
 
   Alt_escape => "quit";
-  F1 => "help";
+  F1 => "help \"bindings\"";
   Ctrl_h => "help";
   Alt_ctrl_d => "close_panel";
 

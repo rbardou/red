@@ -227,3 +227,6 @@ let page (name: string) state =
               add "Help page not found: "; add name; nl ()
           | command ->
               command_page command state
+
+let make_page_list () =
+  "bindings" :: String_map.keys !commands

@@ -114,6 +114,7 @@ struct
   type t =
     | Command
     | External_command
+    | Help_page
 
   let compare = Pervasives.compare
 end

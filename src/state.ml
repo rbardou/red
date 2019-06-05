@@ -23,7 +23,7 @@ struct
 
   let empty = Sequence.empty
 
-  let max_count = 1000
+  let max_count = 100
 
   let add item (history: t) =
     if

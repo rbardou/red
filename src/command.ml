@@ -338,6 +338,11 @@ let rec prompt_confirmation ?(repeated = 0) message state confirm =
   else
     prompt_confirmation ~repeated: (min 2 (repeated + 1)) message state confirm
 
+(* Put history first. *)
+let make_list_choice ?(history = []) (choices: string list): string list =
+  let history_set = String_set.of_list history in
+  history @ List.filter (fun choice -> not (String_set.mem choice history_set)) choices
+
 let choose_from_list ?(default = "") ?(choice = -1) (choice_prompt_text: string) (choices: string list) (state: State.t)
     (validate_choice: string -> unit) =
   (* Create choice file and view. *)
@@ -540,12 +545,15 @@ let help { H.line; add; add_link; nl; add_parameter; par } =
   par ();
   add "Open help page specified by "; add_parameter "page"; add "."; nl ();
   line "It can be a command name or a topic.";
-  add "Default page is "; add_link "bindings"; add "."; nl ();
+  add "If "; add_parameter "page"; add " is not specified, prompt for page name."; nl ();
   par ();
   line "Press Q to go back to what you were doing."
 
 let () = define "help" ~help Command @@ fun state ->
-  display_help state Help.bindings_page
+  let pages = make_list_choice ~history: (State.get_history Help_page state) (Help.make_page_list ()) in
+  choose_from_list ~choice: 0 "Open help page: " pages state @@ fun page ->
+  State.add_history Help_page page state;
+  display_help state (Help.page page)
 
 let () = define "help" ("page" -: String @-> Command) @@ fun page state ->
   display_help state (Help.page page)

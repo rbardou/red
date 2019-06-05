@@ -1,4 +1,12 @@
-module String_map = Map.Make (String)
+module String_map =
+struct
+  include Map.Make (String)
+
+  let keys map =
+    fold (fun key _ acc -> key :: acc) map [] |> List.rev
+end
+
+module String_set = Set.Make (String)
 
 let filter_choices filter choices =
   let filters = Filter_lexer.items [] (Lexing.from_string filter) in
