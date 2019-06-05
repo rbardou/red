@@ -87,11 +87,17 @@ let create ?focus ~run_file ~run_string layout =
 exception Exit
 exception Abort
 
-let abort ?exn reason =
-  Log.error ?exn "%s" reason;
+let abort reason =
+  Log.info "%s" reason;
   raise Abort
 
-let abort ?exn x = Printf.ksprintf (abort ?exn) x
+let abort x = Printf.ksprintf abort x
+
+let abort_with_error reason =
+  Log.error "%s" reason;
+  raise Abort
+
+let abort_with_error x = Printf.ksprintf abort_with_error x
 
 let get_focused_main_view state =
   Panel.get_current_main_view state.focus
@@ -151,7 +157,7 @@ let on_key_press state (key: Key.t) =
                 | Unicode character ->
                     catch (File.replace_selection_by_character character) (get_focused_view state)
                 | Control ->
-                    Log.info "unbound key: %s" (Key.show key)
+                    Log.info "Unbound key: %s" (Key.show key)
 
 let render state frame =
   let w = Render.width frame in
@@ -180,7 +186,7 @@ let create_file_loading state filename =
 let remove_panel panel state =
   match Layout.remove_panel panel state.layout with
     | None ->
-        abort "cannot remove last panel"
+        abort "Cannot remove last panel."
     | Some (new_layout, next_panel) ->
         set_layout state new_layout;
         state.focus <- next_panel

@@ -71,7 +71,8 @@ let bind (context: State.Context.t) (state: State.t) (key: Key.t) (command: stri
 (*                                   Helpers                                  *)
 (******************************************************************************)
 
-let abort ?exn x = State.abort ?exn x
+let abort = State.abort
+let abort_with_error = State.abort_with_error
 
 let rec find_character_forwards text x y f =
   if y >= Text.get_line_count text then
@@ -290,10 +291,7 @@ let save (file: File.t) filename =
     File.set_filename file (Some filename);
 
     if not (System.file_exists filename) then
-      (
-        Text.output_file filename file.text;
-        Log.info "Wrote: %s" filename
-      )
+      Text.output_file filename file.text
     else
       (
         let perm =
@@ -305,11 +303,10 @@ let save (file: File.t) filename =
         in
         let temporary_filename = System.find_temporary_filename filename in
         Text.output_file ?perm temporary_filename file.text;
-        Log.info "Wrote: %s" temporary_filename;
         System.move_file temporary_filename filename;
-        Log.info "Moved to: %s" filename
       );
 
+    Log.info "Wrote: %s" filename;
     file.modified <- false;
 
     (* Clear undo stack (at the very least we should set the modified flags in all undo points). *)
@@ -523,7 +520,7 @@ let split_panel direction pos (state: State.t) =
     ) state.layout
   with
     | None ->
-        abort "failed to replace current panel: panel not found in current layout"
+        abort_with_error "failed to replace current panel: panel not found in current layout"
     | Some new_layout ->
         State.set_layout state new_layout
 
@@ -659,7 +656,7 @@ let help { H.line; par; see_also } =
 let () = define "open" ~help Command @@ fun state ->
   let panel = state.focus in
   choose_from_file_system "Open: " state @@ fun filename ->
-  if not (System.file_exists filename) then abort "file does not exist: %S" filename;
+  if not (System.file_exists filename) then abort "File does not exist: %S" filename;
   let file = State.create_file_loading state filename in
   let view = File.create_view File file in
   Panel.set_current_view panel view
@@ -1359,7 +1356,7 @@ let () = define "validate" ~help Command @@ fun state ->
                             validate_choice choice
                     )
                 | _ ->
-                    abort "focused panel is not a prompt"
+                    abort "Focused panel has no prompt."
 
 let help { H.add; line; nl; par; add_link; see_also } =
   line "Execute a command.";
@@ -1395,7 +1392,7 @@ let () = define "execute_process" ~help Command @@ fun state ->
   State.add_history External_command command state;
   match Shell_lexer.items [] [] (Lexing.from_string command) with
     | exception Failure reason ->
-        abort "parse error in command: %s" reason
+        abort "Parse error in command: %s" reason
     | [] ->
         ()
     | program :: arguments ->
@@ -1429,7 +1426,7 @@ let () = define "switch_file" ~help Command @@ fun state ->
   choose_from_list ~choice: 0 "Switch to file: " choices state @@ fun choice ->
   match List.find (File.has_name choice) state.files with
     | exception Not_found ->
-        abort "no such file: %s" choice
+        abort "No such file: %s" choice
     | file ->
         Panel.set_current_file panel file
 
@@ -1451,7 +1448,7 @@ let () = define "choose_next" ~help Command @@ fun state ->
         let max_choice = List.length choices - 1 in
         if choice.choice > max_choice then choice.choice <- max_choice
     | _ ->
-        abort "focused panel is not a prompt"
+        abort "Focused panel has no prompt."
 
 let help { H.line; add; nl; add_link; par; see_also } =
   line "Select the item below the currently selected one.";
@@ -1468,7 +1465,7 @@ let () = define "choose_previous" ~help Command @@ fun state ->
         choice.choice <- choice.choice - 1;
         if choice.choice < -1 then choice.choice <- -1
     | _ ->
-        abort "focused panel is not a prompt"
+        abort "Focused panel has no prompt."
 
 let help { H.line; add; nl; add_parameter; par; see_also } =
   line "Split current panel vertically (top and bottom).";
@@ -1497,7 +1494,7 @@ let () = define "split_panel_vertically" ~help ("position" -: Float @-> Command)
     let position = Layout.Ratio (int_of_float (position *. 100_000.), 100_000) in
     split_panel Vertical position state
   else
-    abort "invalid position to split panel: %F" position
+    abort "Invalid position to split panel: %F" position
 
 let help { H.line; add; nl; add_parameter; par; see_also } =
   line "Split current panel horizontally (top and bottom).";
@@ -1527,7 +1524,7 @@ let () = define "split_panel_horizontally" ~help ("position" -: Float @-> Comman
     let position = Layout.Ratio (int_of_float (position *. 100_000.), 100_000) in
     split_panel Horizontal position state
   else
-    abort "invalid position to split panel: %F" position
+    abort "Invalid position to split panel: %F" position
 
 let search backwards case_sensitive (state: State.t) =
   let view = State.get_focused_main_view state in
@@ -1558,7 +1555,7 @@ let search backwards case_sensitive (state: State.t) =
           ~subtext view.file.text
     with
       | None ->
-          abort "text not found"
+          abort "Text not found."
       | Some (x1, y1, x2, y2) ->
           cursor.selection_start.x <- x1;
           cursor.selection_start.y <- y1;
@@ -1641,11 +1638,11 @@ let () = define "choose_from_history" ~help Command @@ fun state ->
   let main_view = State.get_focused_main_view state in
   match main_view.prompt with
     | None ->
-        abort "no history here (not a prompt)"
+        abort "No history here (no prompt)."
     | Some { prompt_text; validate_prompt; prompt_view } ->
         match prompt_view.file.history_context with
           | None ->
-              abort "no history here"
+              abort "No history here."
           | Some history_context ->
               let choices = List.map (fun choice -> File.Other, choice) (State.get_history history_context state) in
               choose_from_list ~choice: 0 prompt_text choices state @@ fun choice ->
@@ -1663,10 +1660,10 @@ let () = define "edit_selected_choice" ~help Command @@ fun state ->
         (
           match List.nth (filter_choices filter choices) choice with
             | exception (Invalid_argument _ | Failure _) ->
-                abort "no selected choice"
+                abort "No selected choice."
             | _, choice ->
                 select_all view;
                 File.replace_selection_with_text view (Text.of_utf8_string choice)
         )
     | _ ->
-        abort "not selecting from a list"
+        abort "Not selecting from a list."

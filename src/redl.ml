@@ -6,13 +6,15 @@ module Run = Redl_run
 module Stylist = Redl_stylist
 
 let error ((a, b): Ast.location) message =
-  (* TODO: open file at location and display error there immediately? *)
-  Log.error "File \"%s\", line %d, characters %d-%d: %s"
-    a.pos_fname
-    a.pos_lnum
-    (a.pos_cnum - a.pos_bol)
-    (b.pos_cnum - a.pos_bol)
-    message
+  if a.pos_fname = "" then
+    Log.error "%s" message
+  else
+    Log.error "%s:%d:%d-%d: %s"
+      a.pos_fname
+      a.pos_lnum
+      (a.pos_cnum - a.pos_bol)
+      (b.pos_cnum - a.pos_bol)
+      message
 
 let parse_lexbuf lexbuf =
   try

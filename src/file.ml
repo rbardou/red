@@ -1101,7 +1101,7 @@ let reset_preferred_x file =
 
 let edit save_undo file f =
   if is_read_only file then
-    Log.error "buffer is read-only"
+    Log.info "Buffer is read-only."
   else (
     if save_undo then
       let undo = make_undo file in
@@ -1265,7 +1265,6 @@ let undo file =
     | [] ->
         Log.info "Nothing to undo."
     | undo :: remaining_stack ->
-        Log.info "Undo.";
         file.undo_stack <- remaining_stack;
         file.redo_stack <- make_undo file :: file.redo_stack;
         restore_undo_point file undo
@@ -1276,7 +1275,6 @@ let redo file =
     | [] ->
         Log.info "Nothing to redo."
     | undo :: remaining_stack ->
-        Log.info "Redo.";
         file.undo_stack <- make_undo file :: file.undo_stack;
         file.redo_stack <- remaining_stack;
         restore_undo_point file undo
