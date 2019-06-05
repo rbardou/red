@@ -228,5 +228,8 @@ let page (name: string) state =
           | command ->
               command_page command state
 
+let command_page_list () =
+  String_map.keys !commands
+
 let make_page_list () =
-  "bindings" :: String_map.keys !commands
+  "bindings" :: command_page_list ()

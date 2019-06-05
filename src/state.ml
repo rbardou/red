@@ -19,28 +19,18 @@ module History_context_map = Map.Make (File.History_context)
 
 module History =
 struct
-  type t = string Sequence.t
+  type t = string list
 
-  let empty = Sequence.empty
+  let empty = []
 
   let max_count = 100
 
   let add item (history: t) =
-    if
-      match Sequence.get 0 history with
-        | None ->
-            true
-        | Some previous_item ->
-            item <> previous_item
-    then
-      history
-      |> Sequence.insert 0 item
-      |> Sequence.truncate max_count
-    else
-      history
+    let history = item :: List.filter ((<>) item) history in
+    truncate_list max_count history
 
   let to_list (history: t) =
-    Sequence.to_list history
+    history
 end
 
 type t =

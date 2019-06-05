@@ -27,3 +27,13 @@ let filter_choices filter choices =
     loop 0
   in
   List.filter (fun (_, choice) -> List.for_all (matches choice) filters) choices
+
+let rec truncate_list ?(acc = []) length list =
+  if length = 0 then
+    List.rev acc
+  else
+    match list with
+      | [] ->
+          List.rev acc
+      | head :: tail ->
+          truncate_list ~acc: (head :: acc) (length - 1) tail

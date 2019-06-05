@@ -1361,9 +1361,10 @@ let help { H.add; line; nl; par; add_link; see_also } =
 
 let () = define "execute_command" ~help Command @@ fun state ->
   let commands =
+    (* We use [Help.command_page_list] instead of [!commands], because [!commands] contains duplicates. *)
     make_choice_list
       ~history: (State.get_history Command state)
-      (List.map (fun command -> command.name) !commands)
+      (Help.command_page_list ())
   in
   choose_from_list ~choice: 0 "Execute command: " commands state @@ fun command ->
   State.add_history Command command state;
