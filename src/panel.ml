@@ -140,18 +140,20 @@ let make_status_bar_style has_focus =
   else
     Style.make ~bg: White ~fg: Black ()
 
+let render_modified_flag frame style modified x y =
+  Render.set frame x y (
+    if modified then
+      Render.cell ~style: { style with fg = Black; bg = Red } "*"
+    else
+      Render.cell ~style " "
+  )
+
 (* Render status bar for a panel of kind [File]. *)
 let render_file_status_bar has_focus (frame: Render.frame) (view: File.view) ~x ~y ~w =
   let file = view.file in
   let style = make_status_bar_style has_focus in
 
-  (* Render "Modified" flag. *)
-  Render.set frame x y (
-    if file.modified then
-      Render.cell ~style: { style with fg = Black; bg = Red } "*"
-    else
-      Render.cell ~style " "
-  );
+  render_modified_flag frame style file.modified x y;
 
   (* Render status text. *)
   let status_text =
@@ -219,20 +221,30 @@ let render_choice_list (frame: Render.frame) choices choice ~x ~y ~w ~h =
         | (kind, label) :: tail ->
             let style =
               match index = choice, kind with
-                | false, Other ->
+                | false, (Other | Modified) ->
                     Style.default
-                | true, Other ->
+                | true, (Other | Modified) ->
                     Style.make ~fg: Black ~bg: White ()
-                | false, Recent ->
+                | false, (Recent | Recent_modified) ->
                     Style.fg Cyan
-                | true, Recent ->
+                | true, (Recent | Recent_modified) ->
                     Style.make ~fg: Black ~bg: Cyan ()
                 | false, Directory ->
                     Style.bold ~fg: Blue ()
                 | true, Directory ->
                     Style.bold ~fg: Black ~bg: Blue ()
             in
-            Render.text ~style frame x y w label;
+            (
+              let modified =
+                match kind with
+                  | Modified | Recent_modified ->
+                      true
+                  | _ ->
+                      false
+              in
+              render_modified_flag frame style modified x y
+            );
+            Render.text ~style frame (x + 1) y (w - 1) label;
             loop (index + 1) tail
   in
   loop 0 choices

@@ -123,6 +123,8 @@ type choice_kind =
   | Other
   | Recent
   | Directory
+  | Modified
+  | Recent_modified
 
 type choice_item = choice_kind * string
 

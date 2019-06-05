@@ -338,18 +338,24 @@ let rec prompt_confirmation ?(repeated = 0) message state confirm =
   else
     prompt_confirmation ~repeated: (min 2 (repeated + 1)) message state confirm
 
-(* Put history first. *)
-let make_choice_list ?(history = []) (choices: string list): File.choice_item list =
-  let history_set = String_set.of_list history in
-  List.map (fun choice -> File.Recent, choice) history @
-  (
-    List.filter (fun choice -> not (String_set.mem choice history_set)) choices
-    |> List.map (fun choice -> File.Other, choice)
-  )
+let deduplicate_choices (choices: File.choice_item list): File.choice_item list =
+  let rec loop exists_before acc choices =
+    match choices with
+      | [] ->
+          List.rev acc
+      | ((_, choice) as item) :: tail ->
+          if String_set.mem choice exists_before then
+            loop exists_before acc tail
+          else
+            loop (String_set.add choice exists_before) (item :: acc) tail
+  in
+  loop String_set.empty [] choices
 
 let choose_from_list ?(default = "") ?(choice = -1) (choice_prompt_text: string)
     (choices: File.choice_item list) (state: State.t)
     (validate_choice: string -> unit) =
+  let choices = deduplicate_choices choices in
+
   (* Create choice file and view. *)
   let choice_view =
     let file = File.create choice_prompt_text (Text.of_utf8_string default) in
@@ -361,11 +367,11 @@ let choose_from_list ?(default = "") ?(choice = -1) (choice_prompt_text: string)
   (* Replace current view with choice view. *)
   State.set_focused_view state choice_view
 
+let compare_names a b =
+  (* By using uppercase instead of lowercase, symbols like _ are higher in the choice list. *)
+  String.compare (String.uppercase_ascii a) (String.uppercase_ascii b)
+
 let sort_names list =
-  let compare_names a b =
-    (* By using uppercase instead of lowercase, symbols like _ are higher in the choice list. *)
-    String.compare (String.uppercase_ascii a) (String.uppercase_ascii b)
-  in
   List.sort compare_names list
 
 let choose_from_file_system ?default (prompt: string) (state: State.t) (validate: string -> unit) =
@@ -561,7 +567,10 @@ let help { H.line; add; add_link; nl; add_parameter; par } =
   line "Press Q to go back to what you were doing."
 
 let () = define "help" ~help Command @@ fun state ->
-  let pages = make_choice_list ~history: (State.get_history Help_page state) (Help.make_page_list ()) in
+  let pages =
+    List.map (fun page -> File.Recent, page) (State.get_history Help_page state) @
+    List.map (fun page -> File.Other, page) (Help.make_page_list ())
+  in
   choose_from_list ~choice: 0 "Open help page: " pages state @@ fun page ->
   State.add_history Help_page page state;
   display_help state (Help.page page)
@@ -1361,10 +1370,11 @@ let help { H.add; line; nl; par; add_link; see_also } =
 
 let () = define "execute_command" ~help Command @@ fun state ->
   let commands =
-    (* We use [Help.command_page_list] instead of [!commands], because [!commands] contains duplicates. *)
-    make_choice_list
-      ~history: (State.get_history Command state)
-      (Help.command_page_list ())
+    (* We use [Help.command_page_list] instead of [!commands], because [!commands] contains duplicates.
+       So this is more efficient.
+       Also, if we decide to hide a command from the help panel, we can also hide it from auto-completion. *)
+    List.map (fun page -> File.Recent, page) (State.get_history Command state) @
+    List.map (fun page -> File.Other, page) (Help.command_page_list ())
   in
   choose_from_list ~choice: 0 "Execute command: " commands state @@ fun command ->
   State.add_history Command command state;
@@ -1401,9 +1411,21 @@ let help { H.line; par; see_also } =
 
 let () = define "switch_file" ~help Command @@ fun state ->
   let panel = state.focus in
-  let names = sort_names (List.map File.get_name state.files) in
-  let history = List.map (fun (view: File.view) -> File.get_name view.file) (Panel.get_previous_views panel) in
-  let choices = make_choice_list ~history names in
+  let choices =
+    let make_choice_item_from_file not_modified modified (file: File.t): File.choice_item =
+      (if file.modified then modified else not_modified),
+      File.get_name file
+    in
+    let make_choice_item_from_view not_modified modified (view: File.view) =
+      make_choice_item_from_file not_modified modified view.file
+    in
+    List.map (make_choice_item_from_view Recent Recent_modified) (Panel.get_previous_views panel) @
+    (
+      state.files
+      |> List.sort (fun (a: File.t) (b: File.t) -> compare_names (File.get_name a) (File.get_name b))
+      |> List.map (make_choice_item_from_file Other Modified)
+    )
+  in
   choose_from_list ~choice: 0 "Switch to file: " choices state @@ fun choice ->
   match List.find (File.has_name choice) state.files with
     | exception Not_found ->
@@ -1625,7 +1647,7 @@ let () = define "choose_from_history" ~help Command @@ fun state ->
           | None ->
               abort "no history here"
           | Some history_context ->
-              let choices = make_choice_list (State.get_history history_context state) in
+              let choices = List.map (fun choice -> File.Other, choice) (State.get_history history_context state) in
               choose_from_list ~choice: 0 prompt_text choices state @@ fun choice ->
               main_view.prompt <- None;
               validate_prompt choice
