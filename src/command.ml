@@ -1402,7 +1402,9 @@ let help { H.line; par; see_also } =
 let () = define "switch_file" ~help Command @@ fun state ->
   let panel = state.focus in
   let names = sort_names (List.map File.get_name state.files) in
-  choose_from_list ~choice: 0 "Switch to file: " (make_choice_list names) state @@ fun choice ->
+  let history = List.map (fun (view: File.view) -> File.get_name view.file) (Panel.get_previous_views panel) in
+  let choices = make_choice_list ~history names in
+  choose_from_list ~choice: 0 "Switch to file: " choices state @@ fun choice ->
   match List.find (File.has_name choice) state.files with
     | exception Not_found ->
         abort "no such file: %s" choice

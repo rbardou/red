@@ -55,6 +55,9 @@ let set_current_file panel file =
           | view :: _ ->
               set_current_view panel (File.copy_view view)
 
+let get_previous_views panel =
+  panel.previous_views
+
 let kill_current_view panel =
   match panel.previous_views with
     | head :: tail ->

@@ -23,6 +23,9 @@ val set_current_view: t -> File.view -> unit
     New view has kind [File]. *)
 val set_current_file: t -> File.t -> unit
 
+(** Get the list of views that this panel has in its history, from most recent to least recent. *)
+val get_previous_views: t -> File.view list
+
 (** Switch to previous view and forget about the current one.
 
     Cannot do that with the last view.
