@@ -1,4 +1,9 @@
-let info m = Debug.echo m
+let handlers = ref []
+
+let add_handler (handler: string -> unit) =
+  handlers := handler :: !handlers
+
+let info m = List.iter (fun handler -> handler m) !handlers
 let info x = Printf.ksprintf info x
 
 let warn m = info "WARNING: %s" m

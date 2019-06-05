@@ -56,6 +56,7 @@ type t =
     run_string: string -> t -> unit;
 
     mutable history: History.t History_context_map.t;
+    mutable last_message: string;
   }
 
 let create ?focus ~run_file ~run_string layout =
@@ -66,16 +67,22 @@ let create ?focus ~run_file ~run_string layout =
       | Some focus ->
           focus
   in
-  {
-    layout;
-    focus;
-    clipboard = { text = Text.empty };
-    bindings = Context_map.empty;
-    files = [];
-    run_file;
-    run_string;
-    history = History_context_map.empty;
-  }
+  let state =
+    {
+      layout;
+      focus;
+      clipboard = { text = Text.empty };
+      bindings = Context_map.empty;
+      files = [];
+      run_file;
+      run_string;
+      history = History_context_map.empty;
+      last_message = "";
+    }
+  in
+  let on_log message = state.last_message <- message in
+  Log.add_handler on_log;
+  state
 
 exception Exit
 exception Abort
@@ -120,6 +127,7 @@ let get_global_bindings state =
   get_context_bindings Global state
 
 let on_key_press state (key: Key.t) =
+  state.last_message <- "";
   let catch f x =
     try
       f x
@@ -146,12 +154,15 @@ let on_key_press state (key: Key.t) =
                     Log.info "unbound key: %s" (Key.show key)
 
 let render state frame =
+  let w = Render.width frame in
+  let h = Render.height frame in
   Layout.render
     (Panel.render state.focus)
     frame
-    (Render.width frame)
-    (Render.height frame)
-    state.layout
+    w
+    (h - 1)
+    state.layout;
+  Render.text frame 0 (h - 1) w state.last_message
 
 let set_layout state layout =
   state.layout <- layout
