@@ -339,7 +339,7 @@ let rec prompt_confirmation ?(repeated = 0) message state confirm =
     prompt_confirmation ~repeated: (min 2 (repeated + 1)) message state confirm
 
 (* Put history first. *)
-let make_list_choice ?(history = []) (choices: string list): string list =
+let make_choice_list ?(history = []) (choices: string list): string list =
   let history_set = String_set.of_list history in
   history @ List.filter (fun choice -> not (String_set.mem choice history_set)) choices
 
@@ -550,7 +550,7 @@ let help { H.line; add; add_link; nl; add_parameter; par } =
   line "Press Q to go back to what you were doing."
 
 let () = define "help" ~help Command @@ fun state ->
-  let pages = make_list_choice ~history: (State.get_history Help_page state) (Help.make_page_list ()) in
+  let pages = make_choice_list ~history: (State.get_history Help_page state) (Help.make_page_list ()) in
   choose_from_list ~choice: 0 "Open help page: " pages state @@ fun page ->
   State.add_history Help_page page state;
   display_help state (Help.page page)
@@ -1349,7 +1349,12 @@ let help { H.add; line; nl; par; add_link; see_also } =
   see_also [ "execute_process" ]
 
 let () = define "execute_command" ~help Command @@ fun state ->
-  prompt "Execute command: " ~history: Command state @@ fun command ->
+  let commands =
+    make_choice_list
+      ~history: (State.get_history Command state)
+      (List.map (fun command -> command.name) !commands)
+  in
+  choose_from_list ~choice: 0 "Execute command: " commands state @@ fun command ->
   State.add_history Command command state;
   state.run_string command state
 
