@@ -4,18 +4,28 @@ type t =
   {
     (* Number of times the word from the root to this node appears. *)
     count: int;
+    (* Longest word in this tree. *)
+    longest: int;
     children: t Character.Map.t;
   }
 
-let empty = { count = 0; children = Character.Map.empty }
+let empty = { count = 0; longest = 0; children = Character.Map.empty }
 
 let is_empty (trie: t) =
   trie.count = 0 && Character.Map.is_empty trie.children
 
+let make count children =
+  let longest = Character.Map.fold (fun _ child acc -> max child.longest acc) children 0 + 1 in
+  {
+    count;
+    longest;
+    children;
+  }
+
 let rec add (word: word) (trie: t): t =
   match word with
     | [] ->
-        { trie with count = trie.count + 1 }
+        make (trie.count + 1) trie.children
     | head :: tail ->
         let child =
           match Character.Map.find head trie.children with
@@ -25,12 +35,12 @@ let rec add (word: word) (trie: t): t =
                 child
         in
         let child = add tail child in
-        { trie with children = Character.Map.add head child trie.children }
+        make trie.count (Character.Map.add head child trie.children)
 
 let rec remove (word: word) (trie: t): t =
   match word with
     | [] ->
-        { trie with count = max 0 (trie.count - 1) }
+        make (max 0 (trie.count - 1)) trie.children
     | head :: tail ->
         match Character.Map.find head trie.children with
           | exception Not_found ->
@@ -38,9 +48,9 @@ let rec remove (word: word) (trie: t): t =
           | child ->
               let child = remove tail child in
               if is_empty child then
-                { trie with children = Character.Map.remove head trie.children }
+                make trie.count (Character.Map.remove head trie.children)
               else
-                { trie with children = Character.Map.add head child trie.children }
+                make trie.count (Character.Map.add head child trie.children)
 
 let rec get (word: word) (trie: t): t =
   match word with
@@ -73,12 +83,23 @@ let to_list (trie: t): (word * int) list =
 
 let best_for_autocompletion (trie: t): word =
   let rec get acc trie =
-    (* For now, we just take *a* word.
-       TODO: is it a good idea to take the longest word? or the most used word? *)
-    match Character.Map.min_binding trie.children with
-      | exception Not_found ->
+    let longest_child =
+      let get_best character child acc =
+        match acc with
+          | None ->
+              Some (character, child)
+          | Some (_, previous) ->
+              if child.longest > previous.longest then
+                Some (character, child)
+              else
+                acc
+      in
+      Character.Map.fold get_best trie.children None
+    in
+    match longest_child with
+      | None ->
           List.rev acc
-      | character, child ->
+      | Some (character, child) ->
           get (character :: acc) child
   in
   get [] trie
