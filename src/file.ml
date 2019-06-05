@@ -1584,6 +1584,8 @@ type autocompletion =
     prefix: Trie.word;
     (* Available suffixes for this prefix. *)
     suffixes: Trie.t;
+    (* Best prefix + suffix for fast autocompletion. *)
+    best_word: string;
   }
 
 type autocompletion_result =
@@ -1627,10 +1629,12 @@ let get_autocompletion view =
             let line = Text.get_line end_y text in
             let prefix = Line.to_list ~ofs: start_x ~len: (end_x - start_x) line in
             let suffixes = Trie.get prefix file.words in
+            let best_word = String.concat "" prefix ^ String.concat "" (Trie.best_for_autocompletion suffixes) in
             May_autocomplete {
               y = start_y;
               start_x;
               end_x;
               prefix;
               suffixes;
+              best_word;
             }

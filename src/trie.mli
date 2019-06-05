@@ -33,3 +33,6 @@ val foreach: ?prefix: word -> t -> (word -> int -> unit) -> unit
 
 (** Get the list word occurrences in a trie. *)
 val to_list: t -> (word * int) list
+
+(** Select the best word from a list of suffixes for autocompletion. *)
+val best_for_autocompletion: t -> word

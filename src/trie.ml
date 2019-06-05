@@ -70,3 +70,15 @@ let to_list (trie: t): (word * int) list =
   let result = ref [] in
   foreach trie (fun word count -> result := (word, count) :: !result);
   !result
+
+let best_for_autocompletion (trie: t): word =
+  let rec get acc trie =
+    (* For now, we just take *a* word.
+       TODO: is it a good idea to take the longest word? or the most used word? *)
+    match Character.Map.min_binding trie.children with
+      | exception Not_found ->
+          List.rev acc
+      | character, child ->
+          get (character :: acc) child
+  in
+  get [] trie

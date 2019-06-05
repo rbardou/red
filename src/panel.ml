@@ -149,7 +149,7 @@ let render_modified_flag frame style modified x y =
   )
 
 (* Render status bar for a panel of kind [File]. *)
-let render_file_status_bar has_focus (frame: Render.frame) (view: File.view) ~x ~y ~w =
+let render_file_status_bar has_focus (frame: Render.frame) (view: File.view) autocompletion ~x ~y ~w =
   let file = view.file in
   let style = make_status_bar_style has_focus in
 
@@ -187,7 +187,13 @@ let render_file_status_bar has_focus (frame: Render.frame) (view: File.view) ~x 
         | cursors ->
             Printf.sprintf "(%d cursors)" (List.length cursors)
     in
-    String.concat " " (List.filter ((<>) "") [ file.name; loading; process_status; cursors ])
+    let autocompletion =
+      if autocompletion = "" then
+        ""
+      else
+        " " ^ autocompletion
+    in
+    String.concat " " (List.filter ((<>) "") [ file.name; loading; process_status; cursors; autocompletion ])
   in
   Render.text ~style frame (x + 1) y (w - 1) status_text
 
@@ -304,7 +310,14 @@ let render focused_panel (frame: Render.frame) panel ~x ~y ~w ~h =
 
     | File ->
         render_view has_focus ~x ~y ~w ~h: (h - 1);
-        render_file_status_bar has_focus frame view ~x ~y: (y + h - 1) ~w
+        let autocompletion =
+          match File.get_autocompletion panel.view with
+            | May_autocomplete { best_word } ->
+                best_word
+            | _ ->
+                ""
+        in
+        render_file_status_bar has_focus frame view autocompletion ~x ~y: (y + h - 1) ~w
 
     | List_choice { choice_prompt_text; choices; choice } ->
         let filter = Text.to_string view.file.text in

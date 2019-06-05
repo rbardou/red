@@ -1526,17 +1526,7 @@ let () = define "edit_selected_choice" ~help Command @@ fun state ->
     | _ ->
         abort "Not selecting from a list."
 
-let help { H.line; par } =
-  line "Open list of autocompletions.";
-  par ();
-  line "Autocompletions are big words which start with the one at cursor position.";
-  line "Big words are like words, but underscore is also part of big words.";
-  line "Candidate completions are found in open files.";
-  par ();
-  line "Has no effect if there are more than one cursors."
-
-let () = define "choose_autocompletion" ~help Command @@ fun state ->
-  let view = State.get_focused_view state in
+let with_autocompletion view f =
   match File.get_autocompletion view with
     | No_cursor_to_autocomplete ->
         abort "No cursor to autocomplete."
@@ -1546,11 +1536,35 @@ let () = define "choose_autocompletion" ~help Command @@ fun state ->
         abort_with_error "Nothing to autocomplete here."
     | Word_is_on_multiple_lines ->
         abort_with_error "Word is on multiple lines."
-    | May_autocomplete { y; start_x; end_x; prefix; suffixes } ->
-        let choices =
-          Trie.to_list suffixes
-          |> List.map (fun (word, _) -> File.Other, String.concat "" (prefix @ word))
-        in
-        choose_from_list ~choice: 0 ("Autocomplete " ^ String.concat "" prefix ^ " with: ") choices state
-        @@ fun choice ->
-        File.replace view.file ~x: start_x ~y ~lines: 0 ~characters: (end_x - start_x) (Text.of_utf8_string choice)
+    | May_autocomplete autocompletion ->
+        f autocompletion
+
+let help { H.line; par; see_also } =
+  line "Open list of autocompletions.";
+  par ();
+  line "Autocompletions are big words which start with the one at cursor position.";
+  line "Big words are like words, but underscore is also part of big words.";
+  line "Candidate completions are found in open files.";
+  par ();
+  line "Has no effect if there are more than one cursors.";
+  see_also [ "autocomplete" ]
+
+let () = define "choose_autocompletion" ~help Command @@ fun state ->
+  let view = State.get_focused_view state in
+  with_autocompletion view @@ fun { y; start_x; end_x; prefix; suffixes } ->
+  let choices =
+    Trie.to_list suffixes
+    |> List.map (fun (word, _) -> File.Other, String.concat "" (prefix @ word))
+  in
+  choose_from_list ~choice: 0 ("Autocomplete " ^ String.concat "" prefix ^ " with: ") choices state
+  @@ fun choice ->
+  File.replace view.file ~x: start_x ~y ~lines: 0 ~characters: (end_x - start_x) (Text.of_utf8_string choice)
+
+let help { H.line; see_also } =
+  line "Autocomplete with the completion visible in the status bar.";
+  see_also [ "choose_autocompletion" ]
+
+let () = define "autocomplete" ~help Command @@ fun state ->
+  let view = State.get_focused_view state in
+  with_autocompletion view @@ fun { y; start_x; end_x; best_word } ->
+  File.replace view.file ~x: start_x ~y ~lines: 0 ~characters: (end_x - start_x) (Text.of_utf8_string best_word)
