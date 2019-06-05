@@ -65,10 +65,10 @@ val of_array: ?ofs: int -> ?len: int -> 'a array -> 'a t
 val of_list: ?ofs: int -> ?len: int -> 'a list -> 'a t
 
 (** Convert a sequence into a list. *)
-val to_list: 'a t -> 'a list
+val to_list: ?ofs: int -> ?len: int -> 'a t -> 'a list
 
 (** Iterate over values in index order. *)
-val iter: ('a -> unit) -> 'a t -> unit
+val iter: ?ofs: int -> ?len: int -> ('a -> unit) -> 'a t -> unit
 
 (** Apply a function to all values. *)
 val map: ('a -> 'b) -> 'a t -> 'b t

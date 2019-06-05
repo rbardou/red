@@ -145,6 +145,7 @@ let main () =
 
   Ctrl_s => "save";
   Alt_ctrl_s => "save_as";
+  Ctrl_arobase => "choose_autocompletion";
 
   (* Prompt Bindings *)
   let (=>) = Command.bind Prompt state in

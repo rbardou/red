@@ -209,9 +209,10 @@ let get_default_view (state: t) =
           | view :: _ ->
               File.copy_view view
 
-let close_file file state =
+let close_file (file: File.t) state =
   state.files <- List.filter ((!=) file) state.files;
-  Layout.foreach_panel state.layout (Panel.remove_file file (fun () -> get_default_view state))
+  Layout.foreach_panel state.layout (Panel.remove_file file (fun () -> get_default_view state));
+  File.reset file (* close all spawn groups *)
 
 let add_history context item state =
   let previous_history =

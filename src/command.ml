@@ -195,25 +195,37 @@ let move_end_of_file text _ _ =
 let move_beginning_of_file text _ _ =
   0, 0
 
-let move_right_word text x y =
-  match find_character_forwards text x y Character.is_word_character with
+let move_right_word ?(big = false) text x y =
+  match
+    find_character_forwards text x y
+      (if big then Character.is_big_word_character else Character.is_word_character)
+  with
     | None ->
         move_end_of_file text x y
     | Some (x, y) ->
-        match find_character_forwards text x y Character.is_not_word_character with
+        match
+          find_character_forwards text x y
+            (if big then Character.is_not_big_word_character else Character.is_not_word_character)
+        with
           | None ->
               move_end_of_file text x y
           | Some (x, y) ->
               x, y
 
-let move_left_word text x y =
+let move_left_word ?(big = false) text x y =
   (* Move left once to avoid staying at the same place if we are already at the beginning of a word. *)
   let x, y = move_left text x y in
-  match find_character_backwards text x y Character.is_word_character with
+  match
+    find_character_backwards text x y
+      (if big then Character.is_big_word_character else Character.is_word_character)
+  with
     | None ->
         0, 0
     | Some (x, y) ->
-        match find_character_backwards text x y Character.is_not_word_character with
+        match
+          find_character_backwards text x y
+            (if big then Character.is_not_big_word_character else Character.is_not_word_character)
+        with
           | None ->
               0, 0
           | Some (x, y) ->
@@ -1667,3 +1679,56 @@ let () = define "edit_selected_choice" ~help Command @@ fun state ->
         )
     | _ ->
         abort "Not selecting from a list."
+
+let help { H.line; par } =
+  line "Open list of autocompletions.";
+  par ();
+  line "Autocompletions are big words which start with the one at cursor position.";
+  line "Big words are like words, but underscore is also part of big words.";
+  line "Candidate completions are found in open files.";
+  par ();
+  line "Has no effect if there are more than one cursors."
+
+let () = define "choose_autocompletion" ~help Command @@ fun state ->
+  let view = State.get_focused_view state in
+  match view.cursors with
+    | [] ->
+        abort "No cursor to autocomplete."
+    | _ :: _ :: _ ->
+        abort "Too many cursors to autocomplete."
+    | [ cursor ] ->
+        let file = view.file in
+        let text = file.text in
+        let cursor_x = cursor.position.x in
+        let cursor_y = cursor.position.y in
+
+        (* Check that there is something to autocomplete here. *)
+        let previous_character_is_big_word =
+          match Text.get (cursor_x - 1) cursor_y text with
+            | None ->
+                false
+            | Some character ->
+                Character.is_big_word_character character
+        in
+        if not previous_character_is_big_word then abort_with_error "Nothing to autocomplete here.";
+
+        (* Look for the beginning of the word to autocomplete. *)
+        let start_x, start_y = move_left_word ~big: true text cursor_x cursor_y in
+        if cursor_y <> start_y then
+          abort_with_error "Word is on multiple lines."
+        else
+
+          (* Get the word to autocomplete. *)
+          let line = Text.get_line cursor_y text in
+          let prefix = Line.to_list ~ofs: start_x ~len: (cursor_x - start_x) line in
+          let suffixes = Trie.get prefix file.words in
+          let choices =
+            Trie.to_list suffixes
+            |> List.map (fun (word, _) -> File.Other, String.concat "" (prefix @ word))
+          in
+
+          (* Prompt. *)
+          choose_from_list ~choice: 0 ("Autocomplete " ^ String.concat "" prefix ^ " with: ") choices state
+          @@ fun choice ->
+          File.replace file ~x: start_x ~y: start_y ~lines: 0 ~characters: (cursor.position.x - start_x)
+            (Text.of_utf8_string choice)

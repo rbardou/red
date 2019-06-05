@@ -495,19 +495,31 @@ let of_array ?(ofs = 0) ?len array =
 let of_list ?ofs ?len list =
   of_array ?ofs ?len (Array.of_list list)
 
-let rec iter f sequence =
-  match sequence with
-    | Leaf
-    | Double_black_leaf ->
-        ()
-    | Node (_, _, value, left, right) ->
-        iter f left;
-        f value;
-        iter f right
+let iter ?(ofs = 0) ?len f sequence =
+  let len =
+    match len with
+      | None ->
+          count sequence - ofs
+      | Some len ->
+          len
+  in
+  let rec iter first last f sequence =
+    if last >= first then
+      match sequence with
+        | Leaf
+        | Double_black_leaf ->
+            ()
+        | Node (_, _, value, left, right) ->
+            let left_count = count left in
+            if first < left_count then iter first last f left;
+            if first <= left_count && last >= left_count then f value;
+            if last > left_count then iter (first - left_count - 1) (last - left_count - 1) f right
+  in
+  iter ofs (ofs + len - 1) f sequence
 
-let to_list sequence =
+let to_list ?ofs ?len sequence =
   let items = ref [] in
-  iter (fun item -> items := item :: !items) sequence;
+  iter ?ofs ?len (fun item -> items := item :: !items) sequence;
   List.rev !items
 
 let rec map f sequence =

@@ -150,6 +150,9 @@ type t =
     mutable open_file_descriptors: Unix.file_descr list;
     mutable on_edit: unit -> unit;
     history_context: History_context.t option;
+
+    mutable word_updater_group: Spawn.group option;
+    mutable words: Trie.t;
   }
 
 and view =
@@ -524,6 +527,66 @@ let set_stylist_module view stylist_module =
         view.stylist <- Some (Stylist stylist);
         update_style view
 
+let spawn_word_updater (file: t) (text: Character.t Text.t) (first: int) (last: int)
+    (update_trie: Trie.word -> Trie.t -> Trie.t) =
+  let group =
+    match file.word_updater_group with
+      | None ->
+          let group = Spawn.group () in
+          file.word_updater_group <- Some group;
+          group
+      | Some group ->
+          group
+  in
+
+  (* Call [update_trie] for one word. *)
+  let found_word (word_rev: Trie.word) =
+    match word_rev with
+      | [] ->
+          ()
+      | _ :: _ ->
+          file.words <- update_trie (List.rev word_rev) file.words
+  in
+
+  (* Parse lines of [text] from [first] to [last] and call [update_trie] for each word. *)
+  let rec parse_lines first last =
+    if last >= first then (
+      Spawn.task ~group @@ fun () ->
+      parse_line first;
+      parse_lines (first + 1) last
+    )
+
+  (* Parse the words of one line. *)
+  and parse_line index =
+    let line = Text.get_line index text in
+    let rec parse word_rev from =
+      (* If line is too long, we can't block for that long, and the line
+         is probably not a very good line to parse. So we ignore the
+         current word and stop parsing. Words that were already added,
+         from the beginning of the line, are not removed. *)
+      if from < 1000 then
+        match Line.get from line with
+          | None ->
+              found_word word_rev
+          | Some character ->
+              if Character.is_big_word_character character then
+                parse (character :: word_rev) (from + 1)
+              else (
+                found_word word_rev;
+                parse [] (from + 1)
+              )
+    in
+    parse [] 0
+  in
+
+  parse_lines first last
+
+let add_words_of_lines file text first last =
+  spawn_word_updater file text first last Trie.add
+
+let remove_words_of_lines file text first last =
+  spawn_word_updater file text first last Trie.remove
+
 (* Move marks after text has been inserted.
 
    Move marks as if [lines] lines were inserted after [x, y]
@@ -648,13 +711,21 @@ let update_marks_after_delete ~x ~y ~characters ~lines marks =
   in
   List.iter move_mark marks
 
-let update_views_after_insert ?(keep_marks = false) ~x ~y ~characters ~lines views =
+let update_views_after_insert ~old_text ?(keep_marks = false) ~x ~y ~characters ~lines file =
+  let views = file.views in
+
+  (* Recompute the trie for lines which have been modified and added. *)
+  let new_text = file.text in
+  remove_words_of_lines file old_text y y;
+  add_words_of_lines file new_text y (y + lines);
+
   (* Prepare a chunk of default style to insert. *)
   let style_sub =
     match views with
       | [] ->
           Text.empty
       | view :: _ ->
+          (* TODO: simplify this using [new_text], probably similar to "TODO: why this special case??" *)
           let sub_region = Text.sub_region ~x ~y ~characters ~lines view.file.text in
           Text.map (fun _ -> Style.default) sub_region
   in
@@ -680,6 +751,7 @@ let update_views_after_insert ?(keep_marks = false) ~x ~y ~characters ~lines vie
             let stylist_state_sub =
               match views with
                 | [] ->
+                    (* TODO: why this special case?? *)
                     Text.empty
                 | view :: _ ->
                     let start = stylist.stylist_module.start in
@@ -691,7 +763,13 @@ let update_views_after_insert ?(keep_marks = false) ~x ~y ~characters ~lines vie
   in
   List.iter update_view views
 
-let update_views_after_delete ~x ~y ~characters ~lines views =
+let update_views_after_delete ~old_text ~x ~y ~characters ~lines file =
+  (* Recompute the trie for lines which have been modified and removed. *)
+  let new_text = file.text in
+  remove_words_of_lines file old_text y (y + lines);
+  add_words_of_lines file new_text y y;
+
+  (* Update all views. *)
   let update_view view =
     update_marks_after_delete ~x ~y ~characters ~lines view.marks;
     view.style <- Text.delete_region ~x ~y ~characters ~lines view.style;
@@ -706,7 +784,7 @@ let update_views_after_delete ~x ~y ~characters ~lines views =
        if those two regions intersects. *)
     update_stylist_range ~x1: x ~y1: y ~x2: x ~y2: y view;
   in
-  List.iter update_view views
+  List.iter update_view file.views
 
 (* If [file_descr] is in [file.open_file_descriptors], close it. *)
 let close_file_descriptor file file_descr =
@@ -813,6 +891,8 @@ let create ?(read_only = false) ?history name text =
     open_file_descriptors = [];
     on_edit = (fun () -> ());
     history_context = history;
+    word_updater_group = None;
+    words = Trie.empty;
   }
 
 (* Note: this does not kill stylists. *)
@@ -842,6 +922,15 @@ let reset file =
   close_all_file_descriptors file;
   wait_all_pids file;
   set_filename file None;
+  (
+    match file.word_updater_group with
+      | None ->
+          ()
+      | Some group ->
+          Spawn.kill group;
+          file.word_updater_group <- None
+  );
+  file.words <- Trie.empty;
 
   (* Reset views. *)
   foreach_view file @@ fun view ->
@@ -890,10 +979,11 @@ let load file filename =
               close_file_descriptor file file_descr;
               file.loading <- No;
               let text = Text.of_utf8_substrings_offset_0 (List.rev sub_strings_rev) in
+              let old_text = file.text in
               file.text <- text;
               let lines = Text.get_line_count text - 1 in
               let characters = Text.get_line_length lines text in
-              update_views_after_insert ~keep_marks: true ~x: 0 ~y: 0 ~characters ~lines file.views
+              update_views_after_insert ~old_text ~keep_marks: true ~x: 0 ~y: 0 ~characters ~lines file
             )
           else
             let sub_strings_rev = (Bytes.unsafe_to_string bytes, len) :: sub_strings_rev in
@@ -945,6 +1035,7 @@ let create_process file program arguments =
         let x = Text.get_line_length y file.text in
         let inserted_characters = ref 0 in
         let inserted_lines = ref 0 in
+        let old_text = file.text in
         let rec parse_bytes utf8_parser i =
           if i >= len then
             read alive utf8_parser file_descr
@@ -968,7 +1059,7 @@ let create_process file program arguments =
                   parse_bytes utf8_parser (i + 1)
         in
         parse_bytes utf8_parser 0;
-        update_views_after_insert ~x ~y ~characters: !inserted_characters ~lines: !inserted_lines file.views;
+        update_views_after_insert ~old_text ~x ~y ~characters: !inserted_characters ~lines: !inserted_lines file;
         foreach_view file recenter_y_if_needed
       )
   in
@@ -1057,42 +1148,49 @@ let delete_selection view cursor =
   in
 
   (* Delete selection. *)
-  set_text view.file (Text.delete_region ~x ~y ~characters ~lines view.file.text);
-  update_views_after_delete ~x ~y ~characters ~lines view.file.views
+  let file = view.file in
+  let old_text = file.text in
+  set_text file (Text.delete_region ~x ~y ~characters ~lines old_text);
+  update_views_after_delete ~old_text ~x ~y ~characters ~lines file
 
 let insert_character (character: Character.t) view cursor =
-  set_text view.file (Text.insert cursor.position.x cursor.position.y character view.file.text);
-  update_views_after_insert ~x: cursor.position.x ~y: cursor.position.y ~characters: 1 ~lines: 0 view.file.views
+  let file = view.file in
+  let old_text = file.text in
+  set_text file (Text.insert cursor.position.x cursor.position.y character old_text);
+  update_views_after_insert ~old_text ~x: cursor.position.x ~y: cursor.position.y ~characters: 1 ~lines: 0 file
 
 let insert_new_line view cursor =
-  set_text view.file (Text.insert_new_line cursor.position.x cursor.position.y view.file.text);
-  update_views_after_insert ~x: cursor.position.x ~y: cursor.position.y ~characters: 0 ~lines: 1 view.file.views
+  let file = view.file in
+  let old_text = file.text in
+  set_text file (Text.insert_new_line cursor.position.x cursor.position.y old_text);
+  update_views_after_insert ~old_text ~x: cursor.position.x ~y: cursor.position.y ~characters: 0 ~lines: 1 file
 
 let delete_character view cursor =
   let { x; y } = cursor.position in
-  let text = view.file.text in
-  let length = Text.get_line_length y text in
+  let file = view.file in
+  let old_text = file.text in
+  let length = Text.get_line_length y old_text in
   let characters, lines = if x < length then 1, 0 else 0, 1 in
-  set_text view.file (Text.delete_region ~x ~y ~characters ~lines text);
-  update_views_after_delete ~x ~y ~characters ~lines view.file.views
+  set_text file (Text.delete_region ~x ~y ~characters ~lines old_text);
+  update_views_after_delete ~old_text ~x ~y ~characters ~lines file
 
 let delete_character_backwards view cursor =
   let { x; y } = cursor.position in
+  let file = view.file in
+  let old_text = file.text in
   if x > 0 then
-    let text = view.file.text in
     let x = x - 1 in
     let characters = 1 in
     let lines = 0 in
-    set_text view.file (Text.delete_region ~x ~y ~characters ~lines text);
-    update_views_after_delete ~x ~y ~characters ~lines view.file.views
+    set_text file (Text.delete_region ~x ~y ~characters ~lines old_text);
+    update_views_after_delete ~old_text ~x ~y ~characters ~lines file
   else if y > 0 then
-    let text = view.file.text in
     let y = y - 1 in
-    let x = Text.get_line_length y text in
+    let x = Text.get_line_length y old_text in
     let characters = 0 in
     let lines = 1 in
-    set_text view.file (Text.delete_region ~x ~y ~characters ~lines text);
-    update_views_after_delete ~x ~y ~characters ~lines view.file.views
+    set_text file (Text.delete_region ~x ~y ~characters ~lines old_text);
+    update_views_after_delete ~old_text ~x ~y ~characters ~lines file
 
 let reset_preferred_x file =
   foreach_view file @@ fun view ->
@@ -1157,12 +1255,13 @@ let delete_selection_or_character_backwards view =
 let delete_from_cursors view get_other_position =
   edit true view.file @@ fun () ->
   foreach_cursor view @@ fun cursor ->
-  let text = view.file.text in
+  let file = view.file in
+  let old_text = file.text in
 
   (* Get start and end positions in the right order. *)
   let x, y, x2, y2 =
     let position = cursor.position in
-    let other_x, other_y = get_other_position text cursor in
+    let other_x, other_y = get_other_position old_text cursor in
     let other_position = { x = other_x; y = other_y } in
     if position <=% other_position then
       position.x, position.y, other_x, other_y
@@ -1178,8 +1277,8 @@ let delete_from_cursors view get_other_position =
       x2, y2 - y
   in
 
-  set_text view.file (Text.delete_region ~x ~y ~characters ~lines text);
-  update_views_after_delete ~x ~y ~characters ~lines view.file.views
+  set_text file (Text.delete_region ~x ~y ~characters ~lines old_text);
+  update_views_after_delete ~old_text ~x ~y ~characters ~lines file
 
 let get_selected_text text cursor =
   let left, right = selection_boundaries cursor in
@@ -1197,36 +1296,45 @@ let cut (global_clipboard: Clipboard.t) view =
   clipboard.text <- get_selected_text view.file.text cursor;
   delete_selection view cursor
 
-let replace_selection_with_text view sub =
-  edit true view.file @@ fun () ->
-  foreach_cursor view @@ fun cursor ->
+let replace file ~x ~y ~lines ~characters sub =
+  edit true file @@ fun () ->
 
+  (* Delete. *)
+  let old_text = file.text in
+  set_text file (Text.delete_region ~x ~y ~characters ~lines old_text);
+  update_views_after_delete ~old_text ~x ~y ~characters ~lines file;
+
+  (* Insert. *)
+  let old_text = file.text in
+  set_text file (Text.insert_text ~x ~y ~sub old_text);
+  let lines = Text.get_line_count sub - 1 in
+  let characters = Text.get_line_length lines sub in
+  update_views_after_insert ~old_text ~x ~y ~characters ~lines file
+
+let replace_selection_with_text_for_cursor view cursor sub =
   (* Replace selection with text. *)
   delete_selection view cursor;
   let x = cursor.position.x in
   let y = cursor.position.y in
-  set_text view.file (Text.insert_text ~x ~y ~sub view.file.text);
+  let file = view.file in
+  let old_text = file.text in
+  set_text file (Text.insert_text ~x ~y ~sub old_text);
 
   (* Update marks. *)
   let lines = Text.get_line_count sub - 1 in
   let characters = Text.get_line_length lines sub in
-  update_views_after_insert ~x ~y ~characters ~lines view.file.views
+  update_views_after_insert ~old_text ~x ~y ~characters ~lines file
+
+let replace_selection_with_text view sub =
+  edit true view.file @@ fun () ->
+  foreach_cursor view @@ fun cursor ->
+  replace_selection_with_text_for_cursor view cursor sub
 
 let paste (global_clipboard: Clipboard.t) view =
   edit true view.file @@ fun () ->
   foreach_cursor_clipboard global_clipboard view @@ fun clipboard cursor ->
-
-  (* Replace selection with clipboard. *)
-  delete_selection view cursor;
-  let x = cursor.position.x in
-  let y = cursor.position.y in
   let sub = clipboard.text in
-  set_text view.file (Text.insert_text ~x ~y ~sub view.file.text);
-
-  (* Update marks. *)
-  let lines = Text.get_line_count sub - 1 in
-  let characters = Text.get_line_length lines sub in
-  update_views_after_insert ~x ~y ~characters ~lines view.file.views
+  replace_selection_with_text_for_cursor view cursor sub
 
 let restore_view undo =
   let restore_mark undo =
