@@ -26,4 +26,4 @@ let filter_choices filter choices =
     in
     loop 0
   in
-  List.filter (fun choice -> List.for_all (matches choice) filters) choices
+  List.filter (fun (_, choice) -> List.for_all (matches choice) filters) choices

@@ -339,11 +339,16 @@ let rec prompt_confirmation ?(repeated = 0) message state confirm =
     prompt_confirmation ~repeated: (min 2 (repeated + 1)) message state confirm
 
 (* Put history first. *)
-let make_choice_list ?(history = []) (choices: string list): string list =
+let make_choice_list ?(history = []) (choices: string list): File.choice_item list =
   let history_set = String_set.of_list history in
-  history @ List.filter (fun choice -> not (String_set.mem choice history_set)) choices
+  List.map (fun choice -> File.Recent, choice) history @
+  (
+    List.filter (fun choice -> not (String_set.mem choice history_set)) choices
+    |> List.map (fun choice -> File.Other, choice)
+  )
 
-let choose_from_list ?(default = "") ?(choice = -1) (choice_prompt_text: string) (choices: string list) (state: State.t)
+let choose_from_list ?(default = "") ?(choice = -1) (choice_prompt_text: string)
+    (choices: File.choice_item list) (state: State.t)
     (validate_choice: string -> unit) =
   (* Create choice file and view. *)
   let choice_view =
@@ -403,19 +408,25 @@ let choose_from_file_system ?default (prompt: string) (state: State.t) (validate
   let starting_directory = append_dir_sep_if_needed starting_directory in
 
   let rec browse ?default directory =
-    let names =
-      let append_dir_sep_if_directory filename =
-        if System.is_directory (Filename.concat directory filename) then
-          filename ^ Filename.dir_sep
-        else
-          filename
+    let choices =
+      let directories, files =
+        List.partition
+          (fun filename -> System.is_directory (Filename.concat directory filename))
+          (System.ls directory)
       in
-      (* TODO: sort to show directories separately, and display them in another color *)
-      append_dir_sep_if_needed Filename.parent_dir_name :: (
-        System.ls directory
+      let directories =
+        directories
         |> sort_names
-        |> List.map append_dir_sep_if_directory
-      )
+        |> List.map (fun name -> File.Directory, name ^ Filename.dir_sep)
+      in
+      let files =
+        files
+        |> sort_names
+        |> List.map (fun name -> File.Other, name)
+      in
+      (File.Directory, Filename.parent_dir_name) ::
+      directories @
+      files
     in
     let choice =
       match default with
@@ -425,7 +436,7 @@ let choose_from_file_system ?default (prompt: string) (state: State.t) (validate
         | Some _ ->
             None
     in
-    choose_from_list ?default ?choice (prompt ^ directory) names state @@ fun choice ->
+    choose_from_list ?default ?choice (prompt ^ directory) choices state @@ fun choice ->
     if choice = "" then
       ()
     else if choice = Filename.current_dir_name then
@@ -1335,7 +1346,7 @@ let () = define "validate" ~help Command @@ fun state ->
                       match List.nth (filter_choices filter choices) choice with
                         | exception (Invalid_argument _ | Failure _) ->
                             validate_choice filter
-                        | choice ->
+                        | _, choice ->
                             validate_choice choice
                     )
                 | _ ->
@@ -1390,7 +1401,7 @@ let help { H.line; par; see_also } =
 let () = define "switch_file" ~help Command @@ fun state ->
   let panel = state.focus in
   let names = sort_names (List.map File.get_name state.files) in
-  choose_from_list ~choice: 0 "Switch to file: " names state @@ fun choice ->
+  choose_from_list ~choice: 0 "Switch to file: " (make_choice_list names) state @@ fun choice ->
   match List.find (File.has_name choice) state.files with
     | exception Not_found ->
         abort "no such file: %s" choice
@@ -1611,7 +1622,8 @@ let () = define "choose_from_history" ~help Command @@ fun state ->
           | None ->
               abort "no history here"
           | Some history_context ->
-              choose_from_list ~choice: 0 prompt_text (State.get_history history_context state) state @@ fun choice ->
+              let choices = make_choice_list (State.get_history history_context state) in
+              choose_from_list ~choice: 0 prompt_text choices state @@ fun choice ->
               main_view.prompt <- None;
               validate_prompt choice
 
@@ -1627,7 +1639,7 @@ let () = define "edit_selected_choice" ~help Command @@ fun state ->
           match List.nth (filter_choices filter choices) choice with
             | exception (Invalid_argument _ | Failure _) ->
                 abort "no selected choice"
-            | choice ->
+            | _, choice ->
                 select_all view;
                 File.replace_selection_with_text view (Text.of_utf8_string choice)
         )

@@ -207,20 +207,29 @@ let render_prompt has_focus (frame: Render.frame) view prompt ~x ~y ~w =
     frame view ~x: (x + prompt_length) ~y ~w: (w - prompt_length) ~h: 1
 
 let render_choice_list (frame: Render.frame) choices choice ~x ~y ~w ~h =
-  let rec loop index choices =
+  let rec loop index (choices: File.choice_item list) =
     let y = y + h - 1 - index in
     if y >= 0 then
       match choices with
         | [] ->
             ()
-        | head :: tail ->
+        | (kind, label) :: tail ->
             let style =
-              if index = choice then
-                Style.make ~fg: Black ~bg: White ()
-              else
-                Style.default
+              match index = choice, kind with
+                | false, Other ->
+                    Style.default
+                | true, Other ->
+                    Style.make ~fg: Black ~bg: White ()
+                | false, Recent ->
+                    Style.fg Cyan
+                | true, Recent ->
+                    Style.make ~fg: Black ~bg: Cyan ()
+                | false, Directory ->
+                    Style.bold ~fg: Blue ()
+                | true, Directory ->
+                    Style.bold ~fg: Black ~bg: Blue ()
             in
-            Render.text ~style frame x y w head;
+            Render.text ~style frame x y w label;
             loop (index + 1) tail
   in
   loop 0 choices

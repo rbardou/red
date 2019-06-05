@@ -119,6 +119,13 @@ struct
   let compare = Pervasives.compare
 end
 
+type choice_kind =
+  | Other
+  | Recent
+  | Directory
+
+type choice_item = choice_kind * string
+
 type t =
   {
     mutable views: view list;
@@ -208,7 +215,7 @@ and choice =
   {
     choice_prompt_text: string;
     validate_choice: string -> unit;
-    choices: string list;
+    choices: choice_item list;
     mutable choice: int; (* among choices that match the filter *)
   }
 
