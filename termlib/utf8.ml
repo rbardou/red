@@ -16,7 +16,7 @@ let split_runes ?(invalid_rune = Some "�") str =
 
     (* Read a rune with a length of more than one character. *)
     let rune size =
-      if pos + size >= len then
+      if pos + size > len then
         invalid size
       else
         let rune = String.sub str pos size in

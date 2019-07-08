@@ -120,7 +120,7 @@ let page_exists name =
 
 let add_binding { add; add_link; nl } key (command: Redl.Ast.file) =
   let key = Key.display key in
-  let padding = 24 - String.length key in
+  let padding = 24 - List.length (Utf8.split_runes key) in
   add (String.make padding ' ');
   add key;
   add " ";
