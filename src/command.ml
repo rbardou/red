@@ -1384,19 +1384,17 @@ let () = define "split_panel_horizontally" ~help ("position" -: Float @-> Comman
   else
     abort "Invalid position to split panel: %F" position
 
-let search backwards case_sensitive (state: State.t) =
-  let view = State.get_focused_main_view state in
+let get_selected_text_or_empty (view: File.view) =
+  match view.cursors with
+    | [] ->
+        Text.empty
+    | [ cursor ] ->
+        File.get_cursor_subtext cursor view.file.text
+    | _ :: _ :: _ ->
+        Text.empty
 
-  (* Set starting position. *)
-  (
-    File.foreach_cursor view @@ fun cursor ->
-    let position =
-      let left, right = File.selection_boundaries cursor in
-      if backwards then left else right
-    in
-    cursor.search_start.x <- position.x;
-    cursor.search_start.y <- position.y
-  );
+let search replace_by backwards case_sensitive (state: State.t) =
+  let view = State.get_focused_main_view state in
 
   let search_from_cursor subtext (cursor: File.cursor) =
     match
@@ -1413,18 +1411,32 @@ let search backwards case_sensitive (state: State.t) =
           ~subtext view.file.text
     with
       | None ->
-          abort "Text not found."
+          false
       | Some (x1, y1, x2, y2) ->
           cursor.selection_start.x <- x1;
           cursor.selection_start.y <- y1;
           cursor.position.x <- x2 + 1;
           cursor.position.y <- y2;
-          cursor.preferred_x <- x2
+          cursor.preferred_x <- x2;
+          true
   in
 
-  let search_from_all_cursors ?subtext () =
+  let search_from_all_cursors ?(set_starting_position = false) ?subtext ?replace_by () =
+    (* If we are going to replace text, enter edit mode. *)
+    (
+      match replace_by with
+        | None ->
+            (fun f -> f ())
+        | Some _ ->
+            File.edit true view.file
+    ) @@ fun () ->
+
+    (* Search for all cursors. *)
+    let exists_not_found = ref false in
     (
       File.foreach_cursor view @@ fun cursor ->
+
+      (* Get text to search (before replacing it). *)
       let subtext =
         match subtext with
           | None ->
@@ -1432,21 +1444,37 @@ let search backwards case_sensitive (state: State.t) =
           | Some subtext ->
               subtext
       in
-      search_from_cursor subtext cursor
+
+      (* Replace text. *)
+      (
+        match replace_by with
+          | None ->
+              ()
+          | Some replacement ->
+              File.replace_selection_with_text_for_cursor view cursor replacement;
+      );
+
+      (* Set starting position (after replacing, to not search in the replacement). *)
+      if set_starting_position then (
+        let position =
+          let left, right = File.selection_boundaries cursor in
+          if backwards then left else right
+        in
+        cursor.search_start.x <- position.x;
+        cursor.search_start.y <- position.y;
+      );
+
+      (* Search and move cursor. *)
+      if not (search_from_cursor subtext cursor) then exists_not_found := true
     );
-    File.recenter_if_needed view
+    File.recenter_if_needed view;
+
+    (* If text was not found, say it. *)
+    Log.info "Text not found."
   in
 
   (* Get default subtext to search. *)
-  let default =
-    match view.cursors with
-      | [] ->
-          Text.empty
-      | [ cursor ] ->
-          File.get_cursor_subtext cursor view.file.text
-      | _ :: _ :: _ ->
-          Text.empty
-  in
+  let default = get_selected_text_or_empty view in
 
   (* Create search file and view. *)
   let search_file = File.create "search" default in
@@ -1455,16 +1483,29 @@ let search backwards case_sensitive (state: State.t) =
     File.foreach_cursor search_view @@ fun cursor ->
     move_cursor true false search_view cursor File.move_end_of_line
   );
+  let replacement =
+    match replace_by, view.search with
+      | None, None ->
+          None
+      | Some _, _ ->
+          (* Override previous replacement text. *)
+          replace_by
+      | None, Some search ->
+          (* Keep previous replacement text. *)
+          search.replacement
+  in
   view.search <-
     Some {
       search_view;
+      replacement;
     };
 
-  (* Search once at the start using the text selected by each cursor. *)
-  search_from_all_cursors ();
+  (* When the search file is edited, search again, but using search_file.text instead of cursor selections.
+     And this time, do not set starting position. *)
+  search_file.on_edit <- (fun () -> search_from_all_cursors ~subtext: search_file.text ());
 
-  (* When the search file is edited, search again, but using search_file.text instead of cursor selections. *)
-  search_file.on_edit <- (fun () -> search_from_all_cursors ~subtext: search_file.text ())
+  (* Search once at the start using the text selected by each cursor. *)
+  search_from_all_cursors ~set_starting_position: true ?replace_by ()
 
 let help { H.line; par; add; nl; add_parameter; add_link } =
   line "Search for fixed text.";
@@ -1486,8 +1527,40 @@ let help { H.line; par; add; nl; add_parameter; add_link } =
   add "If "; add_parameter "backwards"; add " is true, search for the first occurrence before the cursor."; nl ();
   line "Else, search for the first occurrence after the cursor. Default is false."
 
-let () = define "search" ~help ("backwards" -: Bool @-> "case_sensitive" -: Bool @-> Command) search
-let () = define "search" ~help Command (search false false)
+let () = define "search" ~help ("backwards" -: Bool @-> "case_sensitive" -: Bool @-> Command) (search None)
+let () = define "search" ~help Command (search None false false)
+
+let help { H.line; par; add; nl; add_parameter; add_link } =
+  line "Replace selected text, then search.";
+  par ();
+  line "If already replacing text, use current replacement text.";
+  line "Else, prompt for a replacement text.";
+  par ();
+  line "Replace selection by replacement text.";
+  add "Then "; add_link "search"; add " for the next occurrence of the selected text before it was replaced."; nl ()
+
+let replace backwards case_sensitive (state: State.t) =
+  let view = State.get_focused_main_view state in
+
+  (* Get previous replacement text, or prompt for one. *)
+  (
+    fun continue ->
+      match view.search with
+        | Some { replacement = Some replacement } ->
+            continue replacement
+        | None | Some { replacement = None } ->
+            let default = get_selected_text_or_empty view in
+            prompt ~history: Replacement_text ~default: (Text.to_string default) "Replace by: " state
+            @@ fun replacement ->
+            State.add_history Replacement_text replacement state;
+            continue (Text.of_utf8_string replacement)
+  ) @@ fun replace_by ->
+
+  (* Replace and search. *)
+  search (Some replace_by) backwards case_sensitive state
+
+let () = define "replace" ~help ("backwards" -: Bool @-> "case_sensitive" -: Bool @-> Command) replace
+let () = define "replace" ~help Command (replace false false)
 
 let help { H.line } =
   line "Open prompt history."

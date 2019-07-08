@@ -115,6 +115,7 @@ struct
     | Command
     | External_command
     | Help_page
+    | Replacement_text
 
   let compare = Pervasives.compare
 end
@@ -181,6 +182,7 @@ and prompt =
 and search =
   {
     search_view: view;
+    replacement: Character.t Text.t option;
   }
 
 and undo =
@@ -216,6 +218,12 @@ and 'state undo_stylist =
     undo_status: 'state stylist_status;
   }
 
+and search_parameters =
+  {
+    backwards: bool;
+    case_sensitive: bool;
+  }
+
 and choice =
   {
     choice_prompt_text: string;
@@ -233,7 +241,7 @@ and help =
 and view_kind =
   | File
   | Prompt
-  | Search of { backwards: bool; case_sensitive: bool }
+  | Search of search_parameters
   | List_choice of choice
   | Help of help
 

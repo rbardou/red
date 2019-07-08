@@ -130,6 +130,8 @@ let main () =
   Ctrl_g => "cancel";
   Ctrl_f => "search";
   Alt_letter_f => "search true false";
+  Ctrl_r => "replace";
+  Alt_letter_r => "replace true false";
 
   F2 => "new";
   F3 => "switch_file";
