@@ -1417,7 +1417,7 @@ let search replace_by backwards case_sensitive (state: State.t) =
           cursor.selection_start.y <- y1;
           cursor.position.x <- x2 + 1;
           cursor.position.y <- y2;
-          cursor.preferred_x <- x2;
+          cursor.preferred_x <- x2 + 1;
           true
   in
 
@@ -1507,7 +1507,7 @@ let search replace_by backwards case_sensitive (state: State.t) =
   (* Search once at the start using the text selected by each cursor. *)
   search_from_all_cursors ~set_starting_position: true ?replace_by ()
 
-let help { H.line; par; add; nl; add_parameter; add_link } =
+let help { H.line; par; add; nl; add_parameter; add_link; see_also } =
   line "Search for fixed text.";
   par ();
   line "Search for the next occurrence of the selected text.";
@@ -1525,19 +1525,21 @@ let help { H.line; par; add; nl; add_parameter; add_link } =
   line "Else, ignore case. Default is false.";
   par ();
   add "If "; add_parameter "backwards"; add " is true, search for the first occurrence before the cursor."; nl ();
-  line "Else, search for the first occurrence after the cursor. Default is false."
+  line "Else, search for the first occurrence after the cursor. Default is false.";
+  see_also [ "replace"; "create_cursor_from_search" ]
 
 let () = define "search" ~help ("backwards" -: Bool @-> "case_sensitive" -: Bool @-> Command) (search None)
 let () = define "search" ~help Command (search None false false)
 
-let help { H.line; par; add; nl; add_parameter; add_link } =
+let help { H.line; par; add; nl; add_parameter; add_link; see_also } =
   line "Replace selected text, then search.";
   par ();
   line "If already replacing text, use current replacement text.";
   line "Else, prompt for a replacement text.";
   par ();
   line "Replace selection by replacement text.";
-  add "Then "; add_link "search"; add " for the next occurrence of the selected text before it was replaced."; nl ()
+  add "Then "; add_link "search"; add " for the next occurrence of the selected text before it was replaced."; nl ();
+  see_also [ "search"; "create_cursor_from_search" ]
 
 let replace backwards case_sensitive (state: State.t) =
   let view = State.get_focused_main_view state in
@@ -1561,6 +1563,76 @@ let replace backwards case_sensitive (state: State.t) =
 
 let () = define "replace" ~help ("backwards" -: Bool @-> "case_sensitive" -: Bool @-> Command) replace
 let () = define "replace" ~help Command (replace false false)
+
+let help { H.line; add; nl; add_parameter; par; see_also } =
+  line "Create a cursor by searching for another occurrence of the selected text.";
+  nl ();
+  add "If "; add_parameter "backwards"; add " is true, search for the first occurrence of the"; nl ();
+  line "text selected by the left-most cursor, before this cursor.";
+  line "Else, search for the first occurrence of the text selected";
+  line "by the right-most cursor, after this cursor. Default is false.";
+  see_also [ "search"; "replace" ]
+
+let create_cursor_from_search backwards (state: State.t) =
+  let view = State.get_focused_view state in
+
+  (* Get text to search for, and starting point. *)
+  let subtext, start =
+    match view.cursors with
+      | [] ->
+          abort "View has no cursor."
+      | head :: tail ->
+          let (<%) = File.(<%) in
+          let cursor =
+            if backwards then
+              let left_most (acc: File.cursor) (candidate: File.cursor) =
+                let acc_min = File.min_mark acc.selection_start acc.position in
+                let candidate_min = File.min_mark candidate.selection_start candidate.position in
+                if candidate_min <% acc_min then candidate else acc
+              in
+              List.fold_left left_most head tail
+            else
+              let right_most (acc: File.cursor) (candidate: File.cursor) =
+                let acc_max = File.max_mark acc.selection_start acc.position in
+                let candidate_max = File.max_mark candidate.selection_start candidate.position in
+                if candidate_max <% acc_max then acc else candidate
+              in
+              List.fold_left right_most head tail
+          in
+          let pattern = File.get_selected_text view.file.text cursor in
+          let start =
+            if backwards then
+              File.min_mark cursor.selection_start cursor.position
+            else
+              File.max_mark cursor.selection_start cursor.position
+          in
+          pattern, start
+  in
+
+  (* Search for another occurrence of the selected text. *)
+  match
+    if backwards then
+      Text.search_backwards
+        Character.equals
+        ~x2: (start.x - 1) ~y2: start.y
+        ~subtext view.file.text
+    else
+      Text.search_forwards
+        Character.equals
+        ~x1: start.x ~y1: start.y
+        ~subtext view.file.text
+  with
+    | None ->
+        abort "Text not found."
+    | Some (x1, y1, x2, y2) ->
+        let cursor = File.create_cursor x1 y1 in
+        cursor.position.x <- x2 + 1;
+        cursor.position.y <- y2;
+        cursor.preferred_x <- x2 + 1;
+        File.set_cursors view (cursor :: view.cursors)
+
+let () = define "create_cursor_from_search" ~help ("backwards" -: Bool @-> Command) create_cursor_from_search
+let () = define "create_cursor_from_search" ~help Command (create_cursor_from_search false)
 
 let help { H.line } =
   line "Open prompt history."

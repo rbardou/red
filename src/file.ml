@@ -17,6 +17,12 @@ type cursor =
 let (<%) m1 m2 = m1.y < m2.y || (m1.y = m2.y && m1.x < m2.x)
 let (<=%) m1 m2 = m1.y < m2.y || (m1.y = m2.y && m1.x <= m2.x)
 
+let min_mark a b =
+  if a <% b then a else b
+
+let max_mark a b =
+  if a <=% b then b else a
+
 let selection_boundaries cursor =
   if cursor.position <% cursor.selection_start then
     cursor.position, cursor.selection_start
