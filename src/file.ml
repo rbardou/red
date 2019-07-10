@@ -862,7 +862,9 @@ let create_cursor x y =
     search_start = { x; y };
   }
 
-(* Created by [Command] because of circular dependency issues. *)
+(* Created by Command because of circular dependency issues: Redl depends on Redl_typing which
+   depends on State which depends on File. We could circumvent this by using Redl_stylist directly
+   instead of Redl.Stylist, but it may be a good idea to have stylists be declared somewhere else anyway? *)
 let choose_stylist_automatically = ref (fun _ -> Log.error "set_stylist is not initialized"; assert false)
 
 let create_view kind file =
