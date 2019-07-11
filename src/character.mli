@@ -32,4 +32,10 @@ val case_insensitive_equals: t -> t -> bool
 (** Compare two characters. *)
 val compare: t -> t -> int
 
+module Set:
+sig
+  include Set.S with type elt = t
+  val ascii_range: char -> char -> t
+end
+
 module Map: Map.S with type key = t

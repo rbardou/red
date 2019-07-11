@@ -1,3 +1,5 @@
+module AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA = Rex
+
 type mark =
   {
     mutable x: int;

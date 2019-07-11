@@ -34,4 +34,20 @@ struct
   let compare = compare
 end
 
+module Set =
+struct
+  include Set.Make (M)
+
+  let ascii_range (a: char) (b: char): t =
+    let a = Char.code a in
+    let b = Char.code b in
+    let rec loop acc b =
+      if b >= a then
+        loop (add (String.make 1 (Char.chr b)) acc) (b - 1)
+      else
+        acc
+    in
+    loop empty b
+end
+
 module Map = Map.Make (M)
