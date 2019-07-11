@@ -66,41 +66,19 @@ type 'state stylist_status =
       end_y: int;
     }
 
-type 'state stylist_module =
-  {
-    (* Initial state, i.e. the state before reading position [(0, 0)]. *)
-    start: 'state;
-
-    (* Test whether two states are similar enough to stop parsing.
-       Should most often be [(=)]. *)
-    equivalent: 'state -> 'state -> bool;
-
-    (* Update the state of a parser after reading one character.
-
-       Usage: [add_char char continue start state]
-
-       Shall call [continue] when the current token is not finished, i.e. [char] is part of it.
-       The state can change though; its new value shall be given to [continue].
-
-       Shall call [start] when the current token finishes, i.e. [char] is part of a new token.
-       The style of the token which just finished shall be given to [start], as well as the new state. *)
-    add_char: 'a. Character.t -> 'state -> ('state -> 'a) -> (Style.t -> 'state -> 'a) -> 'a;
-
-    (* Get the color of the final token. *)
-    end_of_file: 'state -> Style.t;
-  }
-
-type packed_stylist_module = Stylist_module: 'a stylist_module -> packed_stylist_module
-
 type 'state stylist =
   {
-    stylist_module: 'state stylist_module;
+    stylist_module: 'state Stylist.t;
 
     (* For each position [(x, y)], [state] contains the state
        just before the character at this position is added.
 
        Note that we do not store the state before newlines characters,
        as we maintain [state] to have the same shape as the file [text]. *)
+    (* TODO: instead of storing the state at every character, store it only at
+       "checkpoints", i.e. between tokens; it is likely that the state is
+       smaller at those points. But maybe it is not worth it compared to
+       the cost of using options. *)
     mutable state: 'state Text.t;
 
     (* Stylists run concurrently in their own spawn group.
@@ -219,7 +197,7 @@ and packed_undo_stylist = Undo_stylist: 'a undo_stylist -> packed_undo_stylist
 
 and 'state undo_stylist =
   {
-    undo_stylist_module: 'state stylist_module;
+    undo_stylist_module: 'state Stylist.t;
     undo_state: 'state Text.t;
     undo_status: 'state stylist_status;
   }
@@ -297,6 +275,7 @@ let max_update_style_iteration_count = 1000
 
 let update_style_from_status view stylist status =
   let rec search_beginning iteration next_x next_y end_x end_y =
+Debug.echof "search_beginning %d at (%d, %d) until (%d, %d)" iteration next_x next_y end_x end_y;
     if iteration >= max_update_style_iteration_count then
       Search_beginning { next_x; next_y; end_x; end_y }
 
@@ -354,19 +333,16 @@ let update_style_from_status view stylist status =
             in
 
             (* See if previous position is the start of a token. *)
-            stylist_module.add_char previous_character previous_state
-              (
-                fun _ ->
+            match stylist_module.add_char previous_character previous_state previous_x previous_y with
+              | Continue _ ->
                   (* If not, continue to search for the beginning of a token. *)
                   search_beginning (iteration + 1) previous_x previous_y end_x end_y
-              )
-              (
-                fun _ _ ->
+              | End_token _ ->
                   (* If it is, start parsing from previous position. *)
                   parse_forwards (iteration + 1) previous_x previous_y previous_state previous_x previous_y end_x end_y
-              )
 
   and parse_forwards iteration start_x start_y state next_x next_y end_x end_y =
+Debug.echof "parse_forwards %d from (%d, %d) next (%d, %d) until (%d, %d)" iteration start_x start_y next_x next_y end_x end_y;
     if iteration >= max_update_style_iteration_count then
       Parse { start_x; start_y; state; next_x; next_y; end_x; end_y }
 
@@ -374,45 +350,47 @@ let update_style_from_status view stylist status =
       let stylist_module = stylist.stylist_module in
       let text = view.file.text in
 
-      let set_style style =
-        view.style <- Text.map_sub ~x1: start_x ~y1: start_y ~x2: (next_x - 1) ~y2: next_y (fun _ -> style) view.style
+      (* For big tokens, this can block for a while.
+         So, parsers should ensure that tokens are never very big.
+         For instance, for strings, parsers can decide to start a new token after reading
+         a reasonable amount of characters. There would be two consecutive string tokens,
+         but it does not matter. *)
+      let set_style style x2 y2 =
+        view.style <- Text.map_sub ~x1: start_x ~y1: start_y ~x2 ~y2 (fun _ -> style) view.style
       in
 
-      let end_token old_state new_state new_next_x new_next_y =
+      let end_token old_state new_state new_token_start_x new_token_start_y =
         let can_stop_here =
           match old_state with
             | None ->
                 false
             | Some old_state ->
                 stylist_module.equivalent state old_state &&
-                { x = end_x; y = end_y } <% { x = next_x; y = next_y }
+                { x = end_x; y = end_y } <% { x = new_token_start_x; y = new_token_start_y }
         in
         if can_stop_here then
           Up_to_date
         else
-          parse_forwards (iteration + 1) next_x next_y new_state new_next_x new_next_y end_x end_y
+          parse_forwards (iteration + 1) new_token_start_x new_token_start_y new_state
+            new_token_start_x new_token_start_y end_x end_y
       in
 
       let feed_stylist_with_character old_state character new_next_x new_next_y =
-        stylist_module.add_char character state
-          (
-            (* Token continues. *)
-            fun state ->
+        match stylist_module.add_char character state next_x next_y with
+          | Continue state ->
+              (* Token continues. *)
               parse_forwards (iteration + 1) start_x start_y state new_next_x new_next_y end_x end_y
-          )
-          (
-            (* Start of a new token. *)
-            fun style state ->
-              set_style style;
-              end_token old_state state new_next_x new_next_y
-          )
+          | End_token { token_end_x; token_end_y; state; style } ->
+              (* Start of a new token. *)
+              set_style style (token_end_x - 1) token_end_y;
+              end_token old_state state token_end_x token_end_y
       in
 
       let line_count = Text.get_line_count text in
       if next_y >= line_count then
         (* End of file. *)
         (
-          set_style (stylist_module.end_of_file state);
+          set_style (stylist_module.end_of_file state) next_x next_y;
           Up_to_date
         )
       else
@@ -518,7 +496,7 @@ let set_stylist_module view stylist_module =
     | None ->
         (* TODO: reset style to default? (But incrementally.) *)
         view.stylist <- None
-    | Some (Stylist_module stylist_module) ->
+    | Some (Stylist.E stylist_module) ->
         let text = view.file.text in
         let last_line = Text.get_line_count text - 1 in
         let stylist =

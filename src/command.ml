@@ -321,20 +321,20 @@ let display_help (state: State.t) make_page =
   State.set_focused_view state view
 
 let ocaml_stylist =
-  File.Stylist_module {
+  Stylist.E {
     equivalent = Ocaml.Stylist.equivalent;
     start = Ocaml.Stylist.start;
     add_char = Ocaml.Stylist.add_char;
     end_of_file = Ocaml.Stylist.end_of_file;
   }
 
-let redl_stylist =
-  File.Stylist_module {
-    equivalent = Redl.Stylist.equivalent;
-    start = Redl.Stylist.start;
-    add_char = Redl.Stylist.add_char;
-    end_of_file = Redl.Stylist.end_of_file;
-  }
+(* let redl_stylist = *)
+(*   Stylist.E { *)
+(*     equivalent = Redl.Stylist.equivalent; *)
+(*     start = Redl.Stylist.start; *)
+(*     add_char = Redl.Stylist.add_char; *)
+(*     end_of_file = Redl.Stylist.end_of_file; *)
+(*   } *)
 
 let set_stylist (view: File.view) =
   if view.kind = File then (
@@ -351,8 +351,8 @@ let set_stylist (view: File.view) =
               Some ocaml_stylist
             else if Filename.check_suffix filename ".mly" then
               Some ocaml_stylist
-            else if Filename.check_suffix filename ".red" then
-              Some redl_stylist
+            (* else if Filename.check_suffix filename ".red" then *)
+            (*   Some redl_stylist *)
             else
               None
     in

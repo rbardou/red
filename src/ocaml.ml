@@ -115,8 +115,21 @@ struct
       | String_backslash_end -> string_escaped
       | String_end -> string
 
-  let add_char (type a) (character: Character.t) state (continue: t -> a) (start: Style.t -> t -> a): a =
-    let start new_state = start (style state) new_state in
+  let add_char (type a) (character: Character.t) state x y: t Stylist.add_char_result =
+Debug.echof "add_char %S to %s at (%d, %d)" character (show state) x y;
+    let start new_state: t Stylist.add_char_result =
+Debug.echof "start %s" (show new_state);
+      End_token {
+        token_end_x = x;
+        token_end_y = y;
+        state = new_state;
+        style = style state;
+      }
+    in
+    let continue new_state: t Stylist.add_char_result =
+Debug.echof "continue %s" (show new_state);
+      Continue new_state
+    in
     if String.length character = 0 then
       continue state
     else
