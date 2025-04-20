@@ -22,7 +22,7 @@ let rec spawn_input_reader
         ~state
         ()
     else
-      match Term.input_char state buf.[i] with
+      match Term.input_char state (Bytes.get buf i) with
         | Invalid _ ->
             loop Empty (i + 1)
         | Done key ->
