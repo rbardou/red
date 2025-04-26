@@ -123,7 +123,7 @@ struct
     | Help_page
     | Replacement_text
 
-  let compare = Pervasives.compare
+  let compare = Stdlib.compare
 end
 
 type choice_kind =
