@@ -10,7 +10,7 @@ struct
     | List_choice
     | Help
 
-  let compare = Pervasives.compare
+  let compare = Stdlib.compare
 end
 
 module Context_map = Map.Make (Context)

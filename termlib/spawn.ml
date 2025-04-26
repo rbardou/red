@@ -1,7 +1,7 @@
 module File_descr =
 struct
   type t = Unix.file_descr
-  let compare = (Pervasives.compare: Unix.file_descr -> Unix.file_descr -> int)
+  let compare = (Stdlib.compare: Unix.file_descr -> Unix.file_descr -> int)
 end
 
 module File_descr_map =

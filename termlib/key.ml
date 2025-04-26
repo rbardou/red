@@ -1535,7 +1535,7 @@ module Ordered =
 struct
   type key = t
   type t = key
-  let compare = (Pervasives.compare: t -> t -> int)
+  let compare = (Stdlib.compare: t -> t -> int)
 end
 
 module Set = Set.Make (Ordered)
